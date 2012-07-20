@@ -1,0 +1,47 @@
+{
+  "name": "bxh",
+  "version": "0.7.1",
+  "description": "Bounding interval hierarchy and bounding volume hierarchy library for nodejs",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/imbcmdth/bxh.git"
+  },
+  "keywords": [
+    "bvh",
+    "bih",
+    "3d",
+    "2d",
+    "bounding",
+    "volume",
+    "interval",
+    "hierarchy",
+    "spatial",
+    "acceleration",
+    "intersection",
+    "search",
+    "javascript"
+  ],
+  "devDependencies": {
+    "vows": "0.6.x",
+    "mjs": "1.0.x",
+    "owldoc": "0.0.x"
+  },
+  "author": {
+    "name": "Jon-Carlos Rivera",
+    "email": "jon.carlos.rivera@gmail.com",
+    "url": "http://jon-carlos.com"
+  },
+  "scripts": {
+    "test": "vows"
+  },
+  "licenses": [
+    {
+      "type": "LGPL",
+      "url" : "http://www.gnu.org/licenses/lgpl.html"
+    }
+  ],
+  "engine": {
+    "node": ">=0.6.x"
+  }
+}
