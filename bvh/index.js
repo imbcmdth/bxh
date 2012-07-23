@@ -2,32 +2,41 @@
 
 var AABB = require('../aabb'),
     SegmentHelpers = require('../helpers/segment.js'),
-    SAHHelpers = require('../helpers/sah.js'),
+    TreeBuilders = require('../helpers/builders'),
     NodeHelpers = require('../helpers/node.js');
 
-function BVH(dimensions, leafSizeMin, leafSizeMax){
+function BVH(dimensions, leafSizeMin, leafSizeMax, buildAlgorithm) {
 	this._Dimensions = dimensions || this._Dimensions; 
+
+	// The optimal leaf size is dependent on the user agent and model size
+	// Chrome : 1-11  ?? Who knows ??
+	// Firefox: ~3
+	// Opera  : ~?
+	// IE     : ~?
+
 	this._minLeaf = leafSizeMin || this._minLeaf; // Minimum leaf size
 	this._maxLeaf = leafSizeMax || this._maxLeaf; // Maximum leaf size
 
-	this._T = null;  // The tree's root
-	this.i = null;  // The tree's "envelope" or AABB
-
-	this.segmentHelpers = SegmentHelpers(this._Dimensions);
-	this.SAHHelpers = SAHHelpers(
+	this.treeBuilder = (buildAlgorithm || TreeBuilders.SAH)(
 		this._Dimensions,
+		this._maxLeaf,
 		10,  /* = _kT - Cost per node-traversal */
 		5,   /* = _kI - Cost per intersection test */
-		1000, /* = _kO - Cost savings for *empty* overlapped area (higher = better) */
+		10, /* = _kO - Cost savings for *empty* overlapped area (higher = better) */
 		1);  /* = _kB - Cost savings for balanced splits (lower = better) */
-	this.nodeHelpers = NodeHelpers;
+
+	this._T = null; // The tree's root
+	this.i = null;  // The tree's AABB
+
+	this.segmentHelpers = SegmentHelpers(this._Dimensions);
+	this.nodeHelpers = NodeHelpers(this._Dimensions);
 };
 
 BVH.prototype = {
 	_Dimensions: 3,
 	_minLeaf: 2,
 	_maxLeaf: 4,
-	use8WayNodes: false,
+	useMultiWayNodes: 0, // 0 = 2 way, 1 = 4 way, 2 = 8 way
 
 	_makeUnfinishedNode : function(boundingBox, sortedArraysOfNodes, totalWeight){
 		return {
@@ -52,112 +61,13 @@ BVH.prototype = {
 	},
 
 
-	_recursiveBuild : function(sortedArraysOfNodes, AABB, localWeight){
+	_recursiveBuild : function(AABB, sortedArraysOfNodes, localWeight){
 		var numberOfElements = sortedArraysOfNodes[0].length,
-		    makeMBV = this.SAHHelpers.makeMBV.bind(this.SAHHelpers);
+		    makeMBV = this.nodeHelpers.makeMBV.bind(this.nodeHelpers),
+		    finalNodes = [];
 
-		if(numberOfElements <= this._maxLeaf) return this._makeLeafNode(makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
+		this._makeSubpartRecursive(sortedArraysOfNodes, AABB, localWeight, finalNodes, 0);
 
-		var finalNodes = [],
-		    subPartA = this._buildSubpart(sortedArraysOfNodes, AABB, localWeight),
-		    subPartAA,
-		    subPartAB,
-		    subPartAAA,
-		    subPartAAB,
-		    subPartABA,
-		    subPartABB;
-
-		numberOfElements = subPartA.nodes[0][0].length;
-		if(numberOfElements <= this._maxLeaf) {
-				finalNodes.push(
-					this._makeLeafNode(makeMBV(subPartA.nodes[0][0]), subPartA.nodes[0][0])
-				);
-		} else {
-			subPartAA = this._buildSubpart(subPartA.nodes[0], makeMBV(subPartA.nodes[0][0]), subPartA.leftWeight);
-			if(!this.use8WayNodes){
-				finalNodes.push(
-					this._recursiveBuild(subPartAA.nodes[0], makeMBV(subPartAA.nodes[0][0]), subPartAA.leftWeight)
-				);
-				finalNodes.push(
-					this._recursiveBuild(subPartAA.nodes[1], makeMBV(subPartAA.nodes[1][0]), subPartAA.rightWeight)
-				);
-			} else {
-				numberOfElements = subPartAA.nodes[0][0].length;
-				if(numberOfElements <= this._maxLeaf) {
-						finalNodes.push(
-							this._makeLeafNode(makeMBV(subPartAA.nodes[0][0]), subPartAA.nodes[0][0])
-						);
-				} else {
-					subPartAAA = this._buildSubpart(subPartAA.nodes[0], makeMBV(subPartAA.nodes[0][0]), subPartAA.leftWeight);
-					finalNodes.push(
-						this._recursiveBuild(subPartAAA.nodes[0], makeMBV(subPartAAA.nodes[0][0]), subPartAAA.leftWeight)
-					);
-					finalNodes.push(
-						this._recursiveBuild(subPartAAA.nodes[1], makeMBV(subPartAAA.nodes[1][0]), subPartAAA.rightWeight)
-					);
-				}
-				numberOfElements = subPartAA.nodes[1][0].length;
-				if(numberOfElements <= this._maxLeaf) {
-						finalNodes.push(
-							this._makeLeafNode(makeMBV(subPartAA.nodes[1][0]), subPartAA.nodes[1][0])
-						);
-				} else {
-					subPartAAB = this._buildSubpart(subPartAA.nodes[1],  makeMBV(subPartAA.nodes[1][0]), subPartAA.rightWeight);
-					finalNodes.push(
-						this._recursiveBuild(subPartAAB.nodes[0], makeMBV(subPartAAB.nodes[0][0]), subPartAAB.leftWeight)
-					);
-					finalNodes.push(
-						this._recursiveBuild(subPartAAB.nodes[1], makeMBV(subPartAAB.nodes[1][0]), subPartAAB.rightWeight)
-					);
-				}
-			}
-		}
-		numberOfElements = subPartA.nodes[1][0].length;
-		if(numberOfElements <= this._maxLeaf) {
-				finalNodes.push(
-					this._makeLeafNode(makeMBV(subPartA.nodes[1][0]), subPartA.nodes[1][0])
-				);
-		} else {
-			subPartAB = this._buildSubpart(subPartA.nodes[1], makeMBV(subPartA.nodes[1][0]), subPartA.rightWeight);
-			if(!this.use8WayNodes){
-				finalNodes.push(
-					this._recursiveBuild(subPartAB.nodes[0], makeMBV(subPartAB.nodes[0][0]), subPartAB.leftWeight)
-				);
-				finalNodes.push(
-					this._recursiveBuild(subPartAB.nodes[1], makeMBV(subPartAB.nodes[1][0]), subPartAB.rightWeight)
-				);
-			} else {
-				numberOfElements = subPartAB.nodes[0][0].length;
-				if(numberOfElements <= this._maxLeaf) {
-						finalNodes.push(
-							this._makeLeafNode(makeMBV(subPartAB.nodes[0][0]), subPartAB.nodes[0][0])
-						);
-				} else {
-						subPartABA = this._buildSubpart(subPartAB.nodes[0],  makeMBV(subPartAB.nodes[0][0]), subPartAB.leftWeight);
-						finalNodes.push(
-							this._recursiveBuild(subPartABA.nodes[0], makeMBV(subPartABA.nodes[0][0]), subPartABA.leftWeight)
-							);
-						finalNodes.push(
-							this._recursiveBuild(subPartABA.nodes[1], makeMBV(subPartABA.nodes[1][0]), subPartABA.rightWeight)
-						);
-				}
-
-				numberOfElements = subPartAB.nodes[1][0].length;
-				if(numberOfElements <= this._maxLeaf) {
-						finalNodes.push(
-							this._makeLeafNode(makeMBV(subPartAB.nodes[1][0]), subPartAB.nodes[1][0])
-						);
-				} else {
-						subPartABB = this._buildSubpart(subPartAB.nodes[1],  makeMBV(subPartAB.nodes[1][0]), subPartAB.rightWeight);
-						finalNodes.push(
-							this._recursiveBuild(subPartABB.nodes[0], makeMBV(subPartABB.nodes[0][0]), subPartABB.leftWeight)
-						);
-						finalNodes.push(
-							this._recursiveBuild(subPartABB.nodes[1], makeMBV(subPartABB.nodes[1][0]), subPartABB.rightWeight)
-						);
-				}
-			}
-		}
 		return this._makeBoxNode(makeMBV(finalNodes), finalNodes);
 	},
 
@@ -165,138 +75,138 @@ BVH.prototype = {
 		var sortedArraysOfNodes = unfinishedNode.s,
 		    AABB = unfinishedNode.i,
 		    numberOfElements = sortedArraysOfNodes[0].length,
-		    makeMBV = this.SAHHelpers.makeMBV.bind(this.SAHHelpers),
+		    makeMBV = this.nodeHelpers.makeMBV.bind(this.nodeHelpers),
 		    localWeight = unfinishedNode.w;
 
-		if(numberOfElements <= this._maxLeaf) return this._makeLeafNode(makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
+		var finalNodes = [];
+		
+		this._makeSubpartUnfinished(sortedArraysOfNodes, AABB, localWeight, finalNodes, 0);
 
-		var finalNodes = [],
-		    subPartA = this._buildSubpart(sortedArraysOfNodes, AABB, localWeight),
-		    subPartAA,
-		    subPartAB,
-		    subPartAAA,
-		    subPartAAB,
-		    subPartABA,
-		    subPartABB;
-
-		numberOfElements = subPartA.nodes[0][0].length;
-		if(numberOfElements <= this._maxLeaf) {
-				finalNodes.push(this._makeLeafNode(
-					makeMBV (subPartA.nodes[0][0]), subPartA.nodes[0][0]));
-		} else {
-			subPartAA =
-				this._buildSubpart(
-					subPartA.nodes[0],
-					makeMBV(subPartA.nodes[0][0]),
-					subPartA.leftWeight);
-			if(!this.use8WayNodes){
-				finalNodes.push(
-					this._makeUnfinishedNode(makeMBV(subPartAA.nodes[0][0]), subPartAA.nodes[0], subPartAA.leftWeight)
-				);
-				finalNodes.push(
-					this._makeUnfinishedNode(makeMBV(subPartAA.nodes[1][0]), subPartAA.nodes[1], subPartAA.rightWeight)
-				);
-			} else {
-				numberOfElements = subPartAA.nodes[0][0].length;
-				if(numberOfElements <= this._maxLeaf) {
-						finalNodes.push(
-							this._makeLeafNode(makeMBV(subPartAA.nodes[0][0]), subPartAA.nodes[0][0])
-						);
-				} else {
-					subPartAAA = this._buildSubpart(subPartAA.nodes[0], makeMBV(subPartAA.nodes[0][0]), subPartAA.leftWeight);
-					finalNodes.push(
-						this._makeUnfinishedNode(makeMBV(subPartAAA.nodes[0][0]), subPartAAA.nodes[0], subPartAAA.leftWeight)
-					);
-					finalNodes.push(
-						this._makeUnfinishedNode(makeMBV(subPartAAA.nodes[1][0]), subPartAAA.nodes[1], subPartAAA.rightWeight)
-					);
-				}
-				numberOfElements = subPartAA.nodes[1][0].length;
-				if(numberOfElements <= this._maxLeaf) {
-						finalNodes.push(
-							this._makeLeafNode(makeMBV(subPartAA.nodes[1][0]), subPartAA.nodes[1][0])
-						);
-				} else {
-					subPartAAB = this._buildSubpart(subPartAA.nodes[1],  makeMBV(subPartAA.nodes[1][0]), subPartAA.rightWeight);
-					finalNodes.push(
-						this._makeUnfinishedNode(makeMBV(subPartAAB.nodes[0][0]), subPartAAB.nodes[0], subPartAAB.leftWeight)
-					);
-					finalNodes.push(
-						this._makeUnfinishedNode(makeMBV(subPartAAB.nodes[1][0]), subPartAAB.nodes[1], subPartAAB.rightWeight)
-					);
-				}
-			}
-		}
-		numberOfElements = subPartA.nodes[1][0].length;
-		if(numberOfElements <= this._maxLeaf) {
-				finalNodes.push(this._makeLeafNode(makeMBV(subPartA.nodes[1][0]), subPartA.nodes[1][0]));
-		} else {
-			subPartAB = this._buildSubpart(subPartA.nodes[1], makeMBV(subPartA.nodes[1][0]), subPartA.rightWeight);
-			if(!this.use8WayNodes){
-				finalNodes.push(
-					this._makeUnfinishedNode(makeMBV(subPartAB.nodes[0][0]), subPartAB.nodes[0], subPartAB.leftWeight)
-				);
-				finalNodes.push(
-					this._makeUnfinishedNode(makeMBV(subPartAB.nodes[1][0]), subPartAB.nodes[1], subPartAB.rightWeight)
-				);
-			} else {
-				numberOfElements = subPartAB.nodes[0][0].length;
-				if(numberOfElements <= this._maxLeaf) {
-						finalNodes.push(
-							this._makeLeafNode(makeMBV(subPartAB.nodes[0][0]), subPartAB.nodes[0][0])
-						);
-				} else {
-						subPartABA = this._buildSubpart(subPartAB.nodes[0],  makeMBV(subPartAB.nodes[0][0]), subPartAB.leftWeight);
-						finalNodes.push(
-							this._makeUnfinishedNode(makeMBV(subPartABA.nodes[0][0]), subPartABA.nodes[0], subPartABA.leftWeight)
-						);
-						finalNodes.push(
-							this._makeUnfinishedNode(makeMBV(subPartABA.nodes[1][0]), subPartABA.nodes[1], subPartABA.rightWeight)
-						);
-				}
-
-				numberOfElements = subPartAB.nodes[1][0].length;
-				if(numberOfElements <= this._maxLeaf) {
-						finalNodes.push(
-							this._makeLeafNode(makeMBV(subPartAB.nodes[1][0]), subPartAB.nodes[1][0])
-						);
-				} else {
-						subPartABB = this._buildSubpart(subPartAB.nodes[1],  makeMBV(subPartAB.nodes[1][0]), subPartAB.rightWeight);
-						finalNodes.push(
-							this._makeUnfinishedNode(makeMBV(subPartABB.nodes[0][0]), subPartABB.nodes[0], subPartABB.leftWeight)
-						);
-						finalNodes.push(
-							this._makeUnfinishedNode(makeMBV(subPartABB.nodes[1][0]), subPartABB.nodes[1], subPartABB.rightWeight)
-						);
-				}
-			}
-		}
 		return this._makeBoxNode(makeMBV(finalNodes), finalNodes);
 	},
 
 	_buildSubpart : function(sortedArraysOfNodes, AABB, totalWeight){
-		var bestSplit = this.SAHHelpers.getLowestCostSplit(sortedArraysOfNodes, AABB, totalWeight),
-		    newArraysOfSortedNodes = this.SAHHelpers.splitSortedNodeArrays(
+		var bestSplit = this.treeBuilder.getBestSplit(sortedArraysOfNodes, AABB, totalWeight);
+
+		if(!bestSplit) return false; // Means the builder determined that this node should be a lead
+
+		var newArraysOfSortedNodes = this.nodeHelpers.splitSortedNodeArrays(
 			sortedArraysOfNodes,
 			bestSplit.axis,
 			bestSplit.index,
 			bestSplit.left,
 			bestSplit.right);
 
-		return {leftWeight: bestSplit.leftWeight, rightWeight: bestSplit.rightWeight, nodes: newArraysOfSortedNodes};
+		return {
+			leftWeight: bestSplit.leftWeight,
+			rightWeight: bestSplit.rightWeight,
+			nodes: newArraysOfSortedNodes
+		};
+	},
+
+	_makeSubpartRecursive : function(sortedArraysOfNodes, AABB, totalWeight, finalNodes, depth) {
+		var subPart =
+			this._buildSubpart(
+				sortedArraysOfNodes,
+				AABB,
+				totalWeight),
+		    makeMBV = this.nodeHelpers.makeMBV.bind(this.nodeHelpers);
+
+		if(!subPart) {
+			return finalNodes.push(this._makeLeafNode(
+				AABB, sortedArraysOfNodes[0]));
+		}
+
+		if(subPart.nodes[0][0].length <= this._minLeaf) {
+			finalNodes.push(this._makeLeafNode(
+				makeMBV (subPart.nodes[0][0]), subPart.nodes[0][0]));
+		} else if(this.useMultiWayNodes <= depth) {
+			finalNodes.push(
+				this._recursiveBuild(makeMBV(subPart.nodes[0][0]), subPart.nodes[0], subPart.leftWeight)
+			);
+		} else {
+			this._makeSubpartRecursive(
+				subPart.nodes[0],
+				makeMBV(subPart.nodes[0][0]),
+				subPart.leftWeight,
+				finalNodes,
+				depth + 1);
+		}
+
+		if(subPart.nodes[1][0].length <= this._minLeaf) {
+			finalNodes.push(this._makeLeafNode(
+				makeMBV (subPart.nodes[1][0]), subPart.nodes[1][0]));
+		} else if(this.useMultiWayNodes <= depth) {
+			finalNodes.push(
+				this._recursiveBuild(makeMBV(subPart.nodes[1][0]), subPart.nodes[1], subPart.rightWeight)
+			);
+		} else {
+			this._makeSubpartRecursive(
+				subPart.nodes[1],
+				makeMBV(subPart.nodes[1][0]),
+				subPart.rightWeight,
+				finalNodes,
+				depth + 1);
+		}
+	},
+
+	_makeSubpartUnfinished : function(sortedArraysOfNodes, AABB, totalWeight, finalNodes, depth) {
+		var subPart =
+			this._buildSubpart(
+				sortedArraysOfNodes,
+				AABB,
+				totalWeight),
+		    makeMBV = this.nodeHelpers.makeMBV.bind(this.nodeHelpers);
+
+		if(!subPart) {
+			return finalNodes.push(this._makeLeafNode(
+				AABB, sortedArraysOfNodes[0]));
+		}
+
+		if(subPart.nodes[0][0].length <= this._minLeaf) {
+			finalNodes.push(this._makeLeafNode(
+				makeMBV (subPart.nodes[0][0]), subPart.nodes[0][0]));
+		} else if(this.useMultiWayNodes <= depth) {
+			finalNodes.push(
+				this._makeUnfinishedNode(makeMBV(subPart.nodes[0][0]), subPart.nodes[0], subPart.leftWeight)
+			);
+		} else {
+			this._makeSubpartUnfinished(
+				subPart.nodes[0],
+				makeMBV(subPart.nodes[0][0]),
+				subPart.leftWeight,
+				finalNodes,
+				depth + 1);
+		}
+
+		if(subPart.nodes[1][0].length <= this._minLeaf) {
+			finalNodes.push(this._makeLeafNode(
+				makeMBV (subPart.nodes[1][0]), subPart.nodes[1][0]));
+		} else if(this.useMultiWayNodes <= depth) {
+			finalNodes.push(
+				this._makeUnfinishedNode(makeMBV(subPart.nodes[1][0]), subPart.nodes[1], subPart.rightWeight)
+			);
+		} else {
+			this._makeSubpartUnfinished(
+				subPart.nodes[1],
+				makeMBV(subPart.nodes[1][0]),
+				subPart.rightWeight,
+				finalNodes,
+				depth + 1);
+		}
 	},
 
 	buildFromArrayOfNodes : function(arrayOfNodes, deferredBuild){
 		//make sorted lists of nodes. one list per axis sorted by bounds starts
-		var sortedArraysOfNodes = this.SAHHelpers.makeSortedArrays(arrayOfNodes),
-		    totalWeight = this.SAHHelpers.makeWeight(arrayOfNodes);
+		var sortedArraysOfNodes = this.nodeHelpers.makeSortedArrays(arrayOfNodes),
+		    totalWeight = this.nodeHelpers.makeWeight(arrayOfNodes);
 
-		this.i = this.SAHHelpers.makeMBV(arrayOfNodes);
+		this.i = this.nodeHelpers.makeMBV(arrayOfNodes);
 
 		if(deferredBuild)
 			this._T = this._makeUnfinishedNode(this.i, sortedArraysOfNodes, totalWeight);
 		else
-			this._T = this._recursiveBuild(sortedArraysOfNodes, this.i, totalWeight);
+			this._T = this._recursiveBuild(this.i, sortedArraysOfNodes, totalWeight);
 	},
 
 	buildFromArrayOfElements : function(arrayOfElements, deferredBuild){
@@ -310,11 +220,11 @@ BVH.prototype = {
 		    currentNode,
 		    parentNode,
 		    //make sorted lists of nodes. one list per axis sorted by bounds starts
-		    sortedArraysOfNodes = this.SAHHelpers.makeSortedArrays(arrayOfNodes),
-		    totalWeight = this.SAHHelpers.makeWeight(arrayOfNodes),
+		    sortedArraysOfNodes = this.nodeHelpers.makeSortedArrays(arrayOfNodes),
+		    totalWeight = this.nodeHelpers.makeWeight(arrayOfNodes),
 		    thisTree = this;
 
-		this.i = this.SAHHelpers.makeMBV(arrayOfNodes);
+		this.i = this.nodeHelpers.makeMBV(arrayOfNodes);
 
 		// Make root..
 		this._T = this._incrementalBuild(this._makeUnfinishedNode(this.i, sortedArraysOfNodes, totalWeight));
