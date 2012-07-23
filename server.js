@@ -17,7 +17,7 @@ var allowCrossDomain = function(req, res, next) {
 
 var server = connect.createServer(
 	//allowCrossDomain,
-	b,
-	connect.static(__dirname)
+	connect.static(__dirname + "/examples"),
+	b
 );
 server.listen(9001);
