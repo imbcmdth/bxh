@@ -1,0 +1,70 @@
+#world-container {
+	position:relative;
+}
+#overlay {
+	position:absolute;
+	top:0px;
+	left:0px;
+}
+.depth-info {
+	width:200px;
+}
+/* for sliders */
+
+.range-container {
+	text-align:left;
+	width:365px;
+	display:block;
+	position:relative;
+}
+
+.center-tagline {
+	text-align:center;
+	font-size:30px;
+	padding-bottom:25px;
+}
+
+.range {
+	border:none;
+	height:37px;
+
+}
+
+.slider:before {
+	display:block;
+	background-image: url('../images/rangeBar.png');
+	background-position:0px 10px;
+	background-repeat: repeat-x;
+	margin-left:9px;
+	width:350px;
+	height:30px;
+	position:relative;
+	position:absolute;
+	content:""
+}
+
+.range td {
+	border:none;
+}
+
+.rangeGrip {
+	width:10px;
+	height:19px;
+	cursor:e-resize;
+	background-image: url('../images/slider.png');
+	z-index:8;
+}
+
+.rangeDrag .rangeGrip, .rangeGrip:hover {
+	background-position:right;
+}
+
+ul.big-list {
+	font-size:24px;
+}
+
+ul.big-list li {
+	padding-bottom:15px;
+	padding-top:15px;
+	line-height:30px;
+}

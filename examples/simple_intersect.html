@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>More Canvas Fun</title>
+<script type='text/javascript' src="browserify.js"></script>
+<style>
+	#world-container{
+		position:relative;
+	}
+	#overlay {
+		position:absolute;
+		top:0px;
+		left:0px;
+	}
+</style>
+</head>
+<body>
+	<h2>About</h2>
+	<p>There are 10,000 objects in the tree and 100 rays are cast from the eye each frame.</p>
+	<p>Intersections within the black part of the rays are ignored because it represents the portion of each ray less than the minimum distance.</p>
+	<p>Red rays are successful intersections and the cyan dot is the nearest point at which each red ray intersected an object.</p>
+	<p>Green rays are rays which hit no objects within their segments and are drawn from the minimum distance (minT) to the maximum distance (maxT).</p>
+	<div id="world-container">
+		<canvas id="world" width="1024px" height="768px" style="border:1px solid blue;"></canvas>
+		<canvas id="overlay" width="1024px" height="768px" style="border:1px solid blue;"></canvas>
+	</div>
+
+<script>
+"use strict";
+
+var nodes;
+
+var border_width; // default?
+var colors_name;
+var colors;
+
+var MJS = require('mjs')(Array),
+	V2 = MJS.V2;
+
+var BxH = require('./bxh'),
+	BVH = BxH.BVH,
+	BIH = BxH.BIH,
+	AABB = BxH.AABB,
+	Ray = BxH.Ray,
+	IntersectInfo = BxH.IntersectInfo;
+
+/*var tree = new BVH(2, 32, 64);
+tree.useMultiWayNodes = 0;*/
+
+var tree = new BIH(2);
+
+var canv_off_x = -512,
+	canv_off_y = -384,
+	zoom = 1;
+
+var rayStartPosition = V2.$(0, 0);
+var mouseCoords = {x: 0, y: 0};
+
+var worldCanvas = document.getElementById('world'),
+	worldContext = worldCanvas.getContext('2d');
+
+var overlayCanvas = document.getElementById('overlay'),
+	overlayContext = overlayCanvas.getContext('2d');
+
+var worldDiv = document.getElementById("world-container");
+
+var framesRendered = 0;
+var intersectTimeTotal = 0;
+
+switch( Math.floor(Math.random()*8) ) {
+	case 0:
+		colors_name = "Primarily Mellow";
+		colors = ['#B01E1E','#174385','#15592F','#FCDC0A','#000000'];
+		border_width = 3.0;
+		break;
+	case 1:
+		colors_name = "A Sad Memory";
+		colors = ['#1C465C','#597B6B','#D5C263','#E8DF97','#2D88A5'];
+		border_width = 5.0;
+		break;
+	case 2:
+		colors_name = "Patriot Games";
+		colors = ['#ffffff','#353842','#5E6669','#BED1AE','#5E6669','#DEEFBB','#5E6669','#BED1AE','#5E6669','#DEEFBB','#C7493B'];
+		border_width = 3.0;
+		break;
+	case 3:
+		colors_name = "Weakerthans";
+		colors = ['#ffffff', '#292929','#292929','#E2E2E2','#E2E2E2','#E2E2E2','#1A4685','#E80101','#FFBF15'];
+		border_width = 1.0;
+		break;
+	case 4:
+		colors_name = "Stoicism";
+		colors = ['#303030','#303030','#303030','#303030','#303030','#303030','#303030','#303030','#F5EDDF','#F5EDDF','#F5EDDF','#F5EDDF','#F5EDDF','#EDE592','#EDE592','#BFC7C7','#BFC7C7','#D84818'];
+		border_width = 1.0;
+		break;
+	case 5:
+		colors_name = "Fish bowl";
+		colors = ['#BDCCDF', '#BDD1DE', '#BDDEDE', '#BDDED7', '#FC8B4A'];
+		border_width = 1.0;
+		break;
+	case 6:
+		colors_name = "Bull in a China Shop";
+		colors = ['#FDECB1','#F7E5B5','#3A271F','#C51616','#EDDBB4'];
+		border_width = 3.0;
+		break;
+	case 7:
+		colors_name = "A Funk Odyssey";
+		colors = ['#7A6C5D','#7A6C5D','#7A6C5D','#7A6C5D','#7A6C5D','#7A6C5D','#F0B603','#F0B603','#F0B603','#F0B603','#F0B603','#98AAAC','#98AAAC','#98AAAC','#A3033D','#A3033D','#E9FABE'];
+		border_width = 3.0;
+		break;
+}
+
+function asyncEach(array, fn, progress, finished) {
+	var i = 0,
+		maxBurnTime = 100, // ms to run before yielding to user agent
+		finishedFn = finished || progress,
+		progressFn = (finishedFn === progress ? null : progress);
+
+	function iter() {
+		var startTime = Date.now();
+
+		while(i < array.length) {
+			fn.call(array, array[i], i++);
+
+			if(Date.now() - startTime > maxBurnTime) {
+				if(progressFn) progressFn(i, array.length);
+				return window.setTimeout(iter, 0);
+			}
+		}
+
+		if(progressFn) progressFn(i, array.length);
+		if(finishedFn) finishedFn(null, array);
+	}
+	window.setTimeout(iter, 0);
+}
+
+function getXY(e) {
+	var posx = 0;
+	var posy = 0;
+	var e = e || window.event;
+
+	if (e.pageX || e.pageY) {
+		posx = e.pageX;
+		posy = e.pageY;
+	} else if (e.clientX || e.clientY) {
+		posx = e.clientX + document.body.scrollLeft
+			 + document.documentElement.scrollLeft;
+		posy = e.clientY + document.body.scrollTop
+			 + document.documentElement.scrollTop;
+	}
+
+	posx = posx - worldDiv.offsetLeft;
+	posy = posy - worldDiv.offsetTop;
+
+	return {x: posx, y: posy};
+}
+
+// shim layer with setTimeout fallback
+window.requestAnimFrame = (function(){
+	return window.requestAnimationFrame    ||
+		window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame    ||
+		window.oRequestAnimationFrame      ||
+		window.msRequestAnimationFrame     ||
+		function( callback ){
+			window.setTimeout(callback, 1000 / 60);
+		};
+})();
+</script>
+<script type="text/javascript">
+function __mouseMove(e) {
+	mouseCoords = getXY(e);
+}
+
+function drawFrame() {
+	var nx = (canv_off_x + mouseCoords.x / zoom) - rayStartPosition[0];
+	var ny = (canv_off_y + mouseCoords.y / zoom) - rayStartPosition[1];
+	var l = Math.sqrt(nx * nx + ny * ny);
+	nx /= l;
+	ny /= l;
+	var totalTime = 0;
+	var drawTime = 0;
+	var numberOfRays = 100;
+	var time = 0;
+	var dir = V2.$(nx, ny);
+	var new_dir = dir;
+	var jitter = V2.$(-ny, nx);
+	framesRendered++;
+	var toKill = [];
+
+	overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+	while(numberOfRays--) {
+		var scale = (numberOfRays-50)/50;
+		new_dir = V2.add(dir, V2.scale(jitter, scale));
+		V2.normalize(new_dir, new_dir);
+		var ray = new Ray(rayStartPosition, new_dir);
+		ray.minT = 50;
+		ray.maxT = 300;
+		var startTime = Date.now();
+		drawTime += doIntersectionAndDrawRay(ray, toKill);
+		totalTime += Date.now() - startTime;
+	}
+	totalTime -= drawTime;
+
+/*	if(toKill.length) {
+		toKill = toKill.sort(function(a, b){ return a - b; });
+		while(toKill.length) {
+			var i = toKill.pop();
+			nodes.splice(i, 1);
+		}
+		tree.buildFromArrayOfNodes(nodes, true);
+		drawNodes(nodes, worldContext);
+		drawLabel(nodes.length, 100);
+	}*/
+
+	overlayContext.fillStyle = "rgb(0,0,0)";
+	/*if(framesRendered === 1)*/ overlayContext.fillText("Time to Intersect: " + totalTime.toFixed(0) +  " ms", 10, 12);
+}
+
+function doIntersectionAndDrawRay(ray, toKill) {
+	var intersectInfo = new IntersectInfo();
+	intersectInfo.ray = ray;
+	tree.intersect(ray, intersectInfo);
+	var startTime = Date.now();
+
+	var rs = ray.toIntervals();
+
+	// If ray intersects, draw the resultant ray segment..
+	if(intersectInfo.isHit) {
+	//	if(intersectInfo.shape.health--> 0) {
+			overlayContext.strokeStyle = "rgba(50, 50, 50, 0.25)";
+			overlayContext.lineWidth = 0.5;
+			
+			// Draw portion of ray between origin and minT
+			overlayContext.beginPath();
+			overlayContext.moveTo(
+				(ray.position[0] - canv_off_x) * zoom,
+				(ray.position[1] - canv_off_y) * zoom);
+			overlayContext.lineTo(
+				(rs[0].a - canv_off_x) * zoom,
+				(rs[1].a - canv_off_y) * zoom);
+			overlayContext.closePath();
+			overlayContext.stroke();
+
+			overlayContext.strokeStyle = "rgba(50, 100, 255, 0.5)";
+
+			var min = intersectInfo.shape.min;
+			var max = intersectInfo.shape.max;
+
+			// Outline selected shape
+			overlayContext.beginPath();
+			overlayContext.strokeRect(
+				(min[0] - 1 - canv_off_x) * zoom,
+				(min[1] - 1 - canv_off_y) * zoom,
+				(max[0] - min[0]+2) * zoom,
+				(max[1] - min[1]+2) * zoom);
+
+			overlayContext.strokeStyle = "rgba(250, 50, 50, 0.5)";
+
+			// Draw portion of ray between minT and maxT
+			overlayContext.beginPath();
+			overlayContext.moveTo(
+				(rs[0].a - canv_off_x) * zoom,
+				(rs[1].a - canv_off_y) * zoom);
+			overlayContext.lineTo(
+				(intersectInfo.position[0] - canv_off_x) * zoom,
+				(intersectInfo.position[1] - canv_off_y) * zoom);
+			overlayContext.closePath();
+			overlayContext.stroke();
+
+			overlayContext.fillStyle = "rgba(50, 250, 250, 1)";
+			overlayContext.strokeStyle = "rgba(50, 250, 250, 1)";
+
+			// Draw intersect point
+			overlayContext.beginPath();
+			overlayContext.arc(
+				(intersectInfo.position[0] - canv_off_x) * zoom,
+				(intersectInfo.position[1] - canv_off_y) * zoom,
+				1.5, 0, Math.PI * 2, true);
+			overlayContext.fill();
+/*		} else {
+			var i = nodes.indexOf(intersectInfo.node);
+			if(i !== -1 && toKill.indexOf(i) < 0) toKill.push(i);
+		}*/
+	} else {
+		overlayContext.strokeStyle = "rgba(50, 50, 50, 0.25)";
+		overlayContext.lineWidth = 0.5;
+
+		// Draw portion of ray between origin and minT
+		overlayContext.beginPath();
+		overlayContext.moveTo(
+			(ray.position[0] - canv_off_x) * zoom,
+			(ray.position[1] - canv_off_y) * zoom);
+		overlayContext.lineTo(
+			(rs[0].a - canv_off_x) * zoom,
+			(rs[1].a - canv_off_y) * zoom);
+		overlayContext.closePath();
+		overlayContext.stroke();
+
+		overlayContext.strokeStyle = "rgba(50, 170, 50, 0.6)";
+
+		overlayContext.beginPath();
+		overlayContext.moveTo((rs[0].a-canv_off_x) * zoom, (rs[1].a-canv_off_y) * zoom);
+		overlayContext.lineTo((rs[0].b-canv_off_x) * zoom, (rs[1].b-canv_off_y) * zoom);
+		overlayContext.closePath();
+		overlayContext.stroke();
+	}
+	return Date.now() - startTime;
+}
+
+function drawNodes(arrayOfNodes, context) {
+	var numOfNodes = arrayOfNodes.length;
+	var canvasWidth = worldCanvas.width;
+	var canvasHeight = worldCanvas.height;
+	var rect = [
+		{a: canv_off_x, b: canvasWidth * zoom},
+		{a: canv_off_y, b: canvasHeight * zoom }];
+	var node;
+
+	context.strokeStyle = "rgb(0,0,0)";
+	context.lineWidth = border_width * 0.75;
+	//context.lineWidth = border_width*zoom;
+
+	context.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+	while(numOfNodes--){
+		node = arrayOfNodes[numOfNodes];
+		context.strokeRect(
+			(node.i.min[0] - canv_off_x) * zoom,
+			(node.i.min[1] - canv_off_y) * zoom,
+			(node.i.max[0] - node.i.min[0]) * zoom,
+			(node.i.max[1] - node.i.min[1]) * zoom);
+		context.fillStyle = node.o.color;
+		context.fillRect(
+			(node.i.min[0] - canv_off_x) * zoom,
+			(node.i.min[1] - canv_off_y) * zoom,
+			(node.i.max[0] - node.i.min[0]) * zoom,
+			(node.i.max[1] - node.i.min[1]) * zoom);
+	}
+	return arrayOfNodes.length;
+}
+
+function drawLabel(numElements, percent) {
+	worldContext.fillStyle="rgb(200,200,200)";
+
+	worldContext.clearRect(0, 0, 200, 40);
+	worldContext.fillStyle = "rgb(0,0,0)";
+	worldContext.fillText("# of Elements in Tree: " + numElements + " (" + percent + "%)", 10, 23);
+	worldContext.fillText("-= " + colors_name +" =-", 10, 33);
+}
+
+nodes = new Array(10000);
+asyncEach(
+	nodes,
+	function(e, i) {
+		var x = (Math.pow(2 * Math.random() - 1, 3) * 480),
+			y = (Math.pow(2 * Math.random() - 1, 3) * 360);
+		if(x < 0) x += 480
+		else x -= 480;
+		if(y < 0) y += 360
+		else y -= 360;
+		var scale = 1 - Math.sqrt(x*x + y*y) / 1200;
+		var min = V2.$(x, y),
+			max = V2.$(x + (Math.random() * 10 * scale + 1), y + (Math.random() * 10 * scale + 1)),
+			aabb = new AABB(min, max),
+			element = {
+				color: colors[(Math.random()*100).toFixed() % colors.length],
+				min: min,
+				max: max,
+				health: aabb.getVolume() * aabb.getVolume()
+			};
+
+		var node = {
+			i: aabb,
+			w: 1,
+			o: element,
+			iFn : function simpleIntersect(ray, intersectInfo) {
+				var rs = aabb.intersectWithSegment(ray.toIntervals());
+				if(rs) {
+					var p = V2.$(rs[0].a, rs[1].a);
+					var dir = V2.sub(p, ray.position);
+					var t = V2.length(dir);
+					if(t < ray.maxT){
+						intersectInfo.isHit = true;
+						intersectInfo.position = p;
+						intersectInfo.shape = this;
+						ray.maxT = t;
+						intersectInfo.node = node;
+					}
+				}
+			},
+			oFn : aabb.overlaps,
+			csFn : aabb.contains,
+			cnFn : aabb.contained
+		};
+		this[i] = node;
+	},
+	progressMeter1,
+	function(err, a) {
+			console.time('t');
+			tree.buildFromArrayOfNodes(a, true);
+			console.timeEnd('t');
+//		tree.buildFromArrayOfNodesAsync(a, progressMeter2, function(){
+			drawNodes(a, worldContext);
+			drawLabel(a.length, 100);
+			worldDiv.addEventListener("mousemove", __mouseMove);
+
+			var lastFrame = 0;
+			var lastAnimation = 0;
+			var moving = false;
+			var target;
+			var diff;
+			var animationLength = 0;
+			var lastRayStart;
+
+			requestAnimFrame(function moveRay() {
+				var frameSpan = Date.now() - lastFrame;
+				var animationSpan = Date.now() - lastAnimation;
+
+				if(!moving) {
+					moving = true;
+					do {
+						var x = (2 * Math.random() - 1) * 512,
+							y = (2 * Math.random() - 1) * 384;
+
+						target = V2.$(x, y)
+						diff = V2.sub(target, rayStartPosition);
+						animationLength = V2.length(diff) * 10;
+					} while(diff < 600);
+					lastRayStart = rayStartPosition;
+					lastAnimation = Date.now();
+				} else if(animationSpan >= animationLength) {
+					rayStartPosition = target;
+					moving = false;
+				} else {
+					rayStartPosition = V2.add(lastRayStart, V2.scale(diff, animationSpan / animationLength));
+				}
+				drawFrame();
+				lastFrame = Date.now();
+				requestAnimFrame(moveRay);
+			});
+//		});
+	}
+);
+
+function progressMeter1(num, total) {
+	drawLabel(num, (num / total * 100).toFixed(0));
+}
+
+function progressMeter2(progress) {
+	drawLabel(nodes.length, progress.percent.toFixed(0));
+}
+
+</script>
+</body>
+</html>
