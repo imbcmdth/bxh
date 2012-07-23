@@ -2,13 +2,11 @@
 
 var AABB = require('../aabb'),
     SegmentHelpers = require('../helpers/segment.js'),
-    SAHHelpers = require('../helpers/sah.js'),
+    TreeBuilders = require('../helpers/builders'),
     NodeHelpers = require('../helpers/node.js');
 
-function BIH(dimensions, leafSizeMin, leafSizeMax) {
+function BIH(dimensions, leafSizeMin, leafSizeMax, buildAlgorithm) {
 	this._Dimensions = dimensions || this._Dimensions; 
-	this._minLeaf = leafSizeMin || this._minLeaf; // Minimum leaf size
-	this._maxLeaf = leafSizeMax || this._maxLeaf; // Maximum leaf size
 
 	// The optimal leaf size is dependent on the user agent and model size
 	// Chrome : 1-11  ?? Who knows ??
@@ -16,17 +14,22 @@ function BIH(dimensions, leafSizeMin, leafSizeMax) {
 	// Opera  : ~?
 	// IE     : ~?
 
-	this._T = null; // The tree's root
-	this.i = null;  // The tree's AABB
+	this._minLeaf = leafSizeMin || this._minLeaf; // Minimum leaf size
+	this._maxLeaf = leafSizeMax || this._maxLeaf; // Maximum leaf size
 
-	this.segmentHelpers = SegmentHelpers(this._Dimensions);
-	this.SAHHelpers = SAHHelpers(
+	this.treeBuilder = (buildAlgorithm || TreeBuilders.SAH)(
 		this._Dimensions,
+		this._maxLeaf,
 		50,  /* = _kT - Cost per node-traversal */
 		25,  /* = _kI - Cost per intersection test */
 		1.2, /* = _kO - Cost savings for *empty* overlapped area (higher = better) */
 		1);  /* = _kB - Cost savings for balanced splits (lower = better) */
-	this.nodeHelpers = NodeHelpers;
+
+	this._T = null; // The tree's root
+	this.i = null;  // The tree's AABB
+
+	this.segmentHelpers = SegmentHelpers(this._Dimensions);
+	this.nodeHelpers = NodeHelpers(this._Dimensions);
 };
 
 BIH.prototype = {
@@ -36,7 +39,7 @@ BIH.prototype = {
 
 	// ALL nodes only have one-letter variables to save space in the event that the tree is serialized.
 	// TODO: Allow the tree to be serialized. :)
-	_makeUnfinishedNode : function(boundingBox, sortedArraysOfNodes, totalWeight){
+	_makeUnfinishedNode : function(boundingBox, sortedArraysOfNodes, totalWeight) {
 		return {
 			i: boundingBox,
 			s: sortedArraysOfNodes,
@@ -44,7 +47,7 @@ BIH.prototype = {
 		};
 	},
 
-	_makeSplittingNode : function(leftPlane, rightPlane, leftNode, rightNode, axis, cost){
+	_makeSplittingNode : function(leftPlane, rightPlane, leftNode, rightNode, axis, cost) {
 		return {
 			x: axis,
 			u: leftPlane,
@@ -54,30 +57,34 @@ BIH.prototype = {
 		};
 	},
 
-	_makeLeafNode : function(boundingBox, elements){
+	_makeLeafNode : function(boundingBox, elements) {
 		return {
 			i: boundingBox,
 			o: elements
 		};
 	},
 
-	_recursiveBuild : function(sortedArraysOfNodes, AABB, localWeight){
+	_deleteLeafNode : function(node) {
+		// this == node's parent
+	},
+
+	_recursiveBuild : function(sortedArraysOfNodes, AABB, localWeight) {
 		var numberOfElements = sortedArraysOfNodes[0].length;
 
 		if(numberOfElements <= this._minLeaf) return this._makeLeafNode(
-			this.SAHHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
+			this.nodeHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
 
 		// scan across all sorrted-axises for a best fit
-		var bestSplit = this.SAHHelpers.getLowestCostSplit(sortedArraysOfNodes, AABB, localWeight);
+		var bestSplit = this.treeBuilder.getBestSplit(sortedArraysOfNodes, AABB, localWeight);
 
 		// If it is cheaper to build a leaf, do so
 		if(!bestSplit) return this._makeLeafNode(
-			this.SAHHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
+			this.nodeHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
 
 		// Make each node's AABB
 		var leftAABB = AABB.clone(),
 		    rightAABB = AABB.clone(),
-		    newArraysOfSortedNodes = this.SAHHelpers.splitSortedNodeArrays(
+		    newArraysOfSortedNodes = this.nodeHelpers.splitSortedNodeArrays(
 		    	sortedArraysOfNodes,
 		    	bestSplit.axis,
 		    	bestSplit.index,
@@ -106,19 +113,19 @@ BIH.prototype = {
 		    localWeight = unfinishedNode.w;
 
 		if(numberOfElements <= this._minLeaf) return this._makeLeafNode(
-			this.SAHHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
+			this.nodeHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
 
 		// scan across all sorrted-axises for a best fit
-		var bestSplit = this.SAHHelpers.getLowestCostSplit(sortedArraysOfNodes, AABB, localWeight);
+		var bestSplit = this.treeBuilder.getBestSplit(sortedArraysOfNodes, AABB, localWeight);
 
 		// If it is cheaper to build a leaf, do so
 		if(!bestSplit) return this._makeLeafNode(
-			this.SAHHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
+			this.nodeHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
 
 		// Make each node's new AABB
 		var leftAABB = AABB.clone(),
 		    rightAABB = AABB.clone(),
-		    newArraysOfSortedNodes = this.SAHHelpers.splitSortedNodeArrays(
+		    newArraysOfSortedNodes = this.nodeHelpers.splitSortedNodeArrays(
 		    	sortedArraysOfNodes,
 		    	bestSplit.axis,
 		    	bestSplit.index,
@@ -141,10 +148,10 @@ BIH.prototype = {
 
 	buildFromArrayOfNodes : function(arrayOfNodes, deferredBuild){
 		//make sorted lists of nodes. one list per axis sorted by min aabb
-		var sortedArraysOfNodes = this.SAHHelpers.makeSortedArrays(arrayOfNodes),
-		    totalWeight = this.SAHHelpers.makeWeight(arrayOfNodes);
+		var sortedArraysOfNodes = this.nodeHelpers.makeSortedArrays(arrayOfNodes),
+		    totalWeight = this.nodeHelpers.makeWeight(arrayOfNodes);
 
-		this.i = this.SAHHelpers.makeMBV(arrayOfNodes);
+		this.i = this.nodeHelpers.makeMBV(arrayOfNodes);
 
 		if(deferredBuild)
 			this._T = this._makeUnfinishedNode(this.i, sortedArraysOfNodes, totalWeight);
@@ -164,11 +171,11 @@ BIH.prototype = {
 		    currentNode,
 		    wasLeft,
 		//make sorted lists of nodes. one list per axis sorted by min aabb
-		    sortedArraysOfNodes = this.SAHHelpers.makeSortedArrays(arrayOfNodes),
-		    totalWeight = this.SAHHelpers.makeWeight(arrayOfNodes),
+		    sortedArraysOfNodes = this.nodeHelpers.makeSortedArrays(arrayOfNodes),
+		    totalWeight = this.nodeHelpers.makeWeight(arrayOfNodes),
 		    thisTree = this;
 
-		this.i = this.SAHHelpers.makeMBV(arrayOfNodes);
+		this.i = this.nodeHelpers.makeMBV(arrayOfNodes);
 
 		// Make root..
 		this._T = this._incrementalBuild(this._makeUnfinishedNode(this.i, sortedArraysOfNodes, totalWeight));
