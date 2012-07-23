@@ -205,6 +205,7 @@ AABB.prototype = {
 		if (omin < 0 && omax < 0) return false;
 
 		if (omin < 0) omin = 0;
+		if (omax > 1) omax = 1;
 
 		for (i = 0; i < this._numDimensions; i++) {
 			new_rs[i] = {
@@ -262,6 +263,7 @@ AABB.prototype = {
 		if (omin < 0 && omax < 0) return false;
 
 		if (omin < 0) omin = 0;
+		if (omax > 1) omax = 1;
 
 		for (i = 0; i < this._numDimensions; i++) {
 			new_rs[i] = {
