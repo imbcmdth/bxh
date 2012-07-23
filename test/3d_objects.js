@@ -42,7 +42,7 @@ MockObject.prototype = {
 		return this.AABB;
 	},
 
-	weight : function() {
+	getWeight : function() {
 		return 1;
 	}
 }
