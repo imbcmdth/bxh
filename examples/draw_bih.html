@@ -1,334 +1,226 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>More Canvas Fun</title>
+<title>BIH Visualizer</title>
 <script type='text/javascript' src="browserify.js"></script>
 <script type="text/javascript" src="javascripts/jquery-1.7.1.min.js"></script>
 <script type="text/javascript" src="javascripts/colResizable-1.3.js"></script>
 <script type="text/javascript" src="javascripts/min-max-slider.js"></script>
+<script type="text/javascript" src="javascripts/globals.js"></script>
+<script type="text/javascript" src="javascripts/utils.js"></script>
+<script type="text/javascript" src="javascripts/draw.js"></script>
+<script type="text/javascript" src="javascripts/colors.js"></script>
 <link rel="stylesheet" href="stylesheets/main.css" TYPE="text/css" media="screen">
-<link
 </head>
 <body>
-	<h2>About</h2>
-	<p>Blue boxes are the bounds for left-nodes and red boxes are the bounds for right-nodes.</p>
 	<div class="control-group">
-		<label for="tree-range-slider" class="control-label">Limit tree node rendering to the following range of depths:</label>
-		<div class="controls range-container">
-			<div class="slider">
-				<table id="tree-range-slider" width="100%" cellspacing="0" cellpadding="0" class="range">
-					<tr>
-						<td width="1%"></td>
-						<td width="10%"></td>
-						<td width="0%"></td>
-					</tr>
-				</table>
+		<h1>BIH Visualizer</h1>
+		<h2>About</h2>
+		<p>Blue boxes are the bounds for left-nodes.</p>
+		<p>Red boxes are the bounds for right-nodes.</p>
+		<p>Green shaded regions are the overlap between two nodes.</p>
+		<h2>Control</h2>
+		<div id="inner-controls">
+			<h3>Build Heuristic<img class="help-image" src="images/help.png"></h3>
+			<div>
+				<label for="build-hueristic-median" class="text-3d">
+					<input id="build-hueristic-median" name="build-hueristic" type="radio" value="Median"/>
+					Median
+				</label>
+				<label for="build-hueristic-sah" class="text-3d">
+					<input id="build-hueristic-sah" name="build-hueristic" type="radio" value="SAH" checked="checked"/>
+					SAH
+				</label>
+			</div>
+			<h3>Cost of Intersection<img class="help-image" src="images/help.png"></h3>
+			<div class="range-container">
+				<div class="slider">
+					<table id="tree-intersection-slider" width="100%" cellspacing="0" cellpadding="0" class="range">
+						<tr>
+							<td width="50%"></td>
+							<td width="0%"></td>
+						</tr>
+					</table>
+				</div>
+			</div>
+			<div class="min-max-container">
+				<div class="depth-info">
+					<span class="depth-label text-3d">Cost of Intersect:&nbsp;</span>
+					<span id="cost-intersect" class="text-3d info-display"></span>
+				</div>
+			</div>
+			<h3>Cost of Traversal<img class="help-image" src="images/help.png"></h3>
+			<div class="range-container">
+				<div class="slider">
+					<table id="tree-traversal-slider" width="100%" cellspacing="0" cellpadding="0" class="range">
+						<tr>
+							<td width="50%"></td>
+							<td width="0%"></td>
+						</tr>
+					</table>
+				</div>
+			</div>
+			<div class="min-max-container">
+				<div class="depth-info">
+					<span class="depth-label text-3d">Cost of Traversal:&nbsp;</span>
+					<span id="cost-traversal" class="text-3d info-display"></span>
+				</div>
+			</div>
+			<h3>Bonus for No Overlap<img class="help-image" src="images/help.png"></h3>
+			<div class="range-container">
+				<div class="slider">
+					<table id="tree-overlap-slider" width="100%" cellspacing="0" cellpadding="0" class="range">
+						<tr>
+							<td width="8%"></td>
+							<td width="0%"></td>
+						</tr>
+					</table>
+				</div>
+			</div>
+			<div class="min-max-container">
+				<div class="depth-info">
+					<span class="depth-label text-3d">Bonus Overlap:&nbsp;</span>
+					<span id="bonus-overlap" class="text-3d info-display"></span>
+				</div>
+			</div>
+			<h3>Leaf Fill Limits<img class="help-image" src="images/help.png"></h3>
+			<div class="range-container">
+				<div class="slider">
+					<table id="tree-min-max-slider" width="100%" cellspacing="0" cellpadding="0" class="range">
+						<tr>
+							<td width="8%"></td>
+							<td width="8%"></td>
+							<td width="0%"></td>
+						</tr>
+					</table>
+				</div>
+			</div>
+			<div class="min-max-container">
+				<div class="depth-info">
+					<span class="depth-label text-3d">Minimum Fill:&nbsp;</span>
+					<span id="min-leaf" class="text-3d info-display"></span>
+				</div>
+				<div class="depth-info">
+					<span class="depth-label text-3d">Maximum Fill:&nbsp;</span>
+					<span id="max-leaf" class="text-3d info-display"></span>
+				</div>
+			</div>
+			<h3>Use the slider below to limit rendering to a specific range of depths<img class="help-image" src="images/help.png"></h3>
+			<div class="range-container">
+				<div class="slider">
+					<table id="tree-range-slider" width="100%" cellspacing="0" cellpadding="0" class="range">
+						<tr>
+							<td width="1%"></td>
+							<td width="99%"></td>
+							<td width="0%"></td>
+						</tr>
+					</table>
+				</div>
+			</div>
+			<div class="min-max-container">
+				<div class="depth-info">
+					<span class="depth-label text-3d">Minimum Depth:&nbsp;</span>
+					<span id="min-depth" class="text-3d info-display"></span>
+				</div>
+				<div class="depth-info">
+					<span class="depth-label text-3d">Maximum Depth:&nbsp;</span>
+					<span id="max-depth" class="text-3d info-display"></span>
+				</div>
 			</div>
 		</div>
-		<div class="depth-info"><span>Minumum Depth:&nbsp;</span><span id="min-depth"></span></div>
-		<div class="depth-info"><span>Maximum Depth:&nbsp;</span><span id="max-depth"></span></div>
 	</div>
 	<div id="world-container">
 		<canvas id="world" width="1024px" height="768px" style="border:1px solid blue;"></canvas>
 		<canvas id="overlay" width="1024px" height="768px" style="border:1px solid blue;"></canvas>
 	</div>
-
-<script>
-"use strict";
-
-var nodes;
-
-var border_width; // default?
-var colors_name;
-var colors;
-
-var MJS = require('mjs')(Array),
-	V2 = MJS.V2;
-
-var BxH = require('./bxh'),
-	BVH = BxH.BVH,
-	BIH = BxH.BIH,
-	AABB = BxH.AABB,
-	Ray = BxH.Ray,
-	IntersectInfo = BxH.IntersectInfo;
-
-var tree = new BIH(2);
-
-var canv_off_x = -512,
-	canv_off_y = -384,
-	zoom = 1;
-
-var worldCanvas = document.getElementById('world'),
-	worldContext = worldCanvas.getContext('2d');
-
-var overlayCanvas = document.getElementById('overlay'),
-	overlayContext = overlayCanvas.getContext('2d');
-
-var worldDiv = document.getElementById("world-container");
-
-var minDepth = 0;
-var maxDepth = 0;
-
-switch( Math.floor(Math.random()*8) ) {
-	case 0:
-		colors_name = "Primarily Mellow";
-		colors = ['#B01E1E','#174385','#15592F','#FCDC0A','#000000'];
-		border_width = 3.0;
-		break;
-	case 1:
-		colors_name = "A Sad Memory";
-		colors = ['#1C465C','#597B6B','#D5C263','#E8DF97','#2D88A5'];
-		border_width = 5.0;
-		break;
-	case 2:
-		colors_name = "Patriot Games";
-		colors = ['#ffffff','#353842','#5E6669','#BED1AE','#5E6669','#DEEFBB','#5E6669','#BED1AE','#5E6669','#DEEFBB','#C7493B'];
-		border_width = 3.0;
-		break;
-	case 3:
-		colors_name = "Weakerthans";
-		colors = ['#ffffff', '#292929','#292929','#E2E2E2','#E2E2E2','#E2E2E2','#1A4685','#E80101','#FFBF15'];
-		border_width = 1.0;
-		break;
-	case 4:
-		colors_name = "Stoicism";
-		colors = ['#303030','#303030','#303030','#303030','#303030','#303030','#303030','#303030','#F5EDDF','#F5EDDF','#F5EDDF','#F5EDDF','#F5EDDF','#EDE592','#EDE592','#BFC7C7','#BFC7C7','#D84818'];
-		border_width = 1.0;
-		break;
-	case 5:
-		colors_name = "Fish bowl";
-		colors = ['#BDCCDF', '#BDD1DE', '#BDDEDE', '#BDDED7', '#FC8B4A'];
-		border_width = 1.0;
-		break;
-	case 6:
-		colors_name = "Bull in a China Shop";
-		colors = ['#FDECB1','#F7E5B5','#3A271F','#C51616','#EDDBB4'];
-		border_width = 3.0;
-		break;
-	case 7:
-		colors_name = "A Funk Odyssey";
-		colors = ['#7A6C5D','#7A6C5D','#7A6C5D','#7A6C5D','#7A6C5D','#7A6C5D','#F0B603','#F0B603','#F0B603','#F0B603','#F0B603','#98AAAC','#98AAAC','#98AAAC','#A3033D','#A3033D','#E9FABE'];
-		border_width = 3.0;
-		break;
-}
-
-function asyncEach(array, fn, progress, finished) {
-	var i = 0,
-		maxBurnTime = 100, // ms to run before yielding to user agent
-		finishedFn = finished || progress,
-		progressFn = (finishedFn === progress ? null : progress);
-
-	function iter() {
-		var startTime = Date.now();
-
-		while(i < array.length) {
-			fn.call(array, array[i], i++);
-
-			if(Date.now() - startTime > maxBurnTime) {
-				if(progressFn) progressFn(i, array.length);
-				return window.setTimeout(iter, 0);
-			}
-		}
-
-		if(progressFn) progressFn(i, array.length);
-		if(finishedFn) finishedFn(null, array);
-	}
-	window.setTimeout(iter, 0);
-}
-
-// shim layer with setTimeout fallback
-window.requestAnimFrame = (function(){
-	return window.requestAnimationFrame    ||
-		window.webkitRequestAnimationFrame ||
-		window.mozRequestAnimationFrame    ||
-		window.oRequestAnimationFrame      ||
-		window.msRequestAnimationFrame     ||
-		function( callback ){
-			window.setTimeout(callback, 1000 / 60);
-		};
-})();
-</script>
 <script type="text/javascript">
-function drawNodes(arrayOfNodes, context) {
-	var numOfNodes = arrayOfNodes.length;
-	var canvasWidth = worldCanvas.width;
-	var canvasHeight = worldCanvas.height;
-	var rect = [
-		{a: canv_off_x, b: canvasWidth * zoom},
-		{a: canv_off_y, b: canvasHeight * zoom }];
-	var node;
+$(function(){
+	"use strict";
 
-	context.strokeStyle = "rgb(0,0,0)";
-	context.lineWidth = border_width;
-	//context.lineWidth = border_width*zoom;
+	var tree = new BIH(2);
 
-	context.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+	var worldCanvas = document.getElementById('world'),
+	    worldContext = worldCanvas.getContext('2d');
 
-	while(numOfNodes--){
-		node = arrayOfNodes[numOfNodes];
-		context.strokeRect(
-			node.i.min[0] * zoom - canv_off_x,
-			node.i.min[1] * zoom - canv_off_y,
-			(node.i.max[0] - node.i.min[0]) * zoom,
-			(node.i.max[1] - node.i.min[1]) * zoom);
-		context.fillStyle = node.o.color;
-		context.fillRect(
-			node.i.min[0] * zoom - canv_off_x,
-			node.i.min[1] * zoom - canv_off_y,
-			(node.i.max[0] - node.i.min[0]) * zoom,
-			(node.i.max[1] - node.i.min[1]) * zoom);
-	}
-	return arrayOfNodes.length;
-}
+	var overlayCanvas = document.getElementById('overlay'),
+	    overlayContext = overlayCanvas.getContext('2d');
 
-function drawObjects(arrayOfObjects, context) {
-	var numOfObjects = arrayOfObjects.length;
-	var canvasWidth = worldCanvas.width;
-	var canvasHeight = worldCanvas.height;
-	var rect = [
-		{a: canv_off_x, b: canvasWidth * zoom},
-		{a: canv_off_y, b: canvasHeight * zoom }];
-	var object;
+	var worldDiv = document.getElementById("world-container");
 
-	context.strokeStyle = "rgb(0,0,0)";
-	context.lineWidth = border_width;
-	//context.lineWidth = border_width*zoom;
+	var nodes;
 
-	context.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-	context.fillStyle = 'rgb(50, 150, 50)';
-
-	while(numOfObjects--){
-		object = arrayOfObjects[numOfObjects];
-		context.strokeRect(
-			(object.AABB.min[0] * zoom) - canv_off_x,
-			(object.AABB.min[1] * zoom) - canv_off_y,
-			(object.AABB.max[0] - object.AABB.min[0]) * zoom,
-			(object.AABB.max[1] - object.AABB.min[1]) * zoom);
-		context.fillRect(
-			(object.AABB.min[0] * zoom) - canv_off_x,
-			(object.AABB.min[1] * zoom) - canv_off_y,
-			(object.AABB.max[0] - object.AABB.min[0]) * zoom,
-			(object.AABB.max[1] - object.AABB.min[1]) * zoom);
-	}
-	return arrayOfObjects.length;
-}
-
-function drawTreeLevel(node, AABB, depth) {
-	var axis,
-	    leftAABB,
-	    rightAABB;
-
-	if(depth === 0) {
-		overlayContext.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-		overlayContext.lineWidth = 2;
+	var colorInfo = {
+		border_width : 0,
+		colors_name : null,
+		colors : null
 	}
 
-	if(node.x){
-		axis = node.x - 1;
+	initColors(colorInfo);
 
-		if(depth <= maxDepth) {
-			leftAABB = AABB.clone();
-			leftAABB.max[axis] = node.u;
+	nodes = new Array(1000);
+	asyncEach(
+		nodes,
+		function(e, i) {
+			var x = (Math.pow(2 * Math.random() - 1, 3) * 450),
+				y = (Math.pow(2 * Math.random() - 1, 3) * 340);
+			if(x < 0) x += 450
+			else x -= 480;
+			if(y < 0) y += 330
+			else y -= 360;
+			var scale = 1 - Math.sqrt(x*x + y*y) / 1200;
+			var min = V2.$(x, y),
+				max = V2.$(x + (Math.random() * 40 * scale + 1), y + (Math.random() * 40 * scale + 1)),
+				aabb = new AABB(min, max),
+				element = {
+					color: colorInfo.colors[(Math.random()*100).toFixed() % colorInfo.colors.length],
+					min: min,
+					max: max,
+					health: aabb.getVolume() * aabb.getVolume()
+				};
 
-			rightAABB = AABB.clone();
-			rightAABB.min[axis] = node.v;
-
-			if(depth >= minDepth) {
-				overlayContext.strokeStyle = "rgb(0,0,150)";
-				overlayContext.fillStyle = "rgba(0,0,150, 0.05)";
-				overlayContext.strokeRect(
-					(leftAABB.min[0] * zoom) - canv_off_x + 1,
-					(leftAABB.min[1] * zoom) - canv_off_y + 1,
-					(leftAABB.max[0] - leftAABB.min[0]) * zoom - 2,
-					(leftAABB.max[1] - leftAABB.min[1]) * zoom - 2);
-				overlayContext.fillRect(
-					(leftAABB.min[0] * zoom) - canv_off_x + 1,
-					(leftAABB.min[1] * zoom) - canv_off_y + 1,
-					(leftAABB.max[0] - leftAABB.min[0]) * zoom - 2,
-					(leftAABB.max[1] - leftAABB.min[1]) * zoom - 2);
-
-				overlayContext.strokeStyle = "rgb(150,0,0)";
-				overlayContext.fillStyle = "rgba(150,0,0, 0.05)";
-				overlayContext.strokeRect(
-					(rightAABB.min[0] * zoom) - canv_off_x + 1,
-					(rightAABB.min[1] * zoom) - canv_off_y + 1,
-					(rightAABB.max[0] - rightAABB.min[0]) * zoom - 2,
-					(rightAABB.max[1] - rightAABB.min[1]) * zoom - 2);
-				overlayContext.fillRect(
-					(rightAABB.min[0] * zoom) - canv_off_x + 1,
-					(rightAABB.min[1] * zoom) - canv_off_y + 1,
-					(rightAABB.max[0] - rightAABB.min[0]) * zoom - 2,
-					(rightAABB.max[1] - rightAABB.min[1]) * zoom - 2);
-			}
-			drawTreeLevel(node.l, leftAABB, depth+1);
-			drawTreeLevel(node.r, rightAABB, depth+1);
-		}
-	}
-}
-
-nodes = new Array(1000);
-asyncEach(
-	nodes,
-	function(e, i) {
-		var x = (Math.pow(2 * Math.random() - 1, 3) * 480),
-			y = (Math.pow(2 * Math.random() - 1, 3) * 360);
-		if(x < 0) x += 480
-		else x -= 480;
-		if(y < 0) y += 360
-		else y -= 360;
-		var scale = 1 - Math.sqrt(x*x + y*y) / 1200;
-		var min = V2.$(x, y),
-			max = V2.$(x + (Math.random() * 40 * scale + 1), y + (Math.random() * 40 * scale + 1)),
-			aabb = new AABB(min, max),
-			element = {
-				color: colors[(Math.random()*100).toFixed() % colors.length],
-				min: min,
-				max: max,
-				health: aabb.getVolume() * aabb.getVolume()
-			};
-
-		var node = {
-			i: aabb,
-			w: 1,
-			o: element,
-			iFn : function simpleIntersect(ray, intersectInfo) {
-				var rs = aabb.intersectWithSegment(ray.toIntervals());
-				if(rs) {
-					var p = V2.$(rs[0].a, rs[1].a);
-					var dir = V2.sub(p, ray.position);
-					var t = V2.length(dir);
-					if(t < ray.maxT){
-						intersectInfo.isHit = true;
-						intersectInfo.position = p;
-						intersectInfo.shape = this;
-						ray.maxT = t;
-						intersectInfo.node = node;
+			var node = {
+				i: aabb,
+				w: 1,
+				o: element,
+				iFn : function simpleIntersect(ray, intersectInfo) {
+					var rs = aabb.intersectWithSegment(ray.toIntervals());
+					if(rs) {
+						var p = V2.$(rs[0].a, rs[1].a);
+						var dir = V2.sub(p, ray.position);
+						var t = V2.length(dir);
+						if(t < ray.maxT){
+							intersectInfo.isHit = true;
+							intersectInfo.position = p;
+							intersectInfo.shape = this;
+							ray.maxT = t;
+							intersectInfo.node = node;
+						}
 					}
-				}
-			},
-			oFn : aabb.overlaps,
-			csFn : aabb.contains,
-			cnFn : aabb.contained
-		};
-		this[i] = node;
-	},
-	progressMeter1,
-	function(err, a) {
-			console.time('t');
-			tree.buildFromArrayOfNodes(a, false);
-			console.timeEnd('t');
-//		tree.buildFromArrayOfNodesAsync(a, progressMeter2, function(){
-			drawNodes(nodes, worldContext);
-			drawTreeLevel(tree._T, tree.i, 0);
-//		});
+				},
+				oFn : aabb.overlaps,
+				csFn : aabb.contains,
+				cnFn : aabb.contained
+			}; 
+			this[i] = node;
+		},
+		progressMeter1,
+		function(err, a) {
+				console.time('t');
+				tree.buildFromArrayOfNodes(a, false);
+				console.timeEnd('t');
+	//		tree.buildFromArrayOfNodesAsync(a, progressMeter2, function(){
+				drawNodes(worldContext, nodes, colorInfo);
+				initMinMaxSlider(tree, nodes, drawBIHTree, overlayContext);
+	//		});
+		}
+	);
+
+	function progressMeter1(num, total) {
 	}
-);
 
-function progressMeter1(num, total) {
-}
-
-function progressMeter2(progress) {
-}
+	function progressMeter2(progress) {
+	}
+});
 </script>
 </body>
 </html>
