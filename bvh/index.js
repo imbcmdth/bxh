@@ -6,7 +6,7 @@ var AABB = require('../aabb'),
     NodeHelpers = require('../helpers/node.js');
 
 function BVH(dimensions, leafSizeMin, leafSizeMax, buildAlgorithm) {
-	this._Dimensions = dimensions || this._Dimensions; 
+	this._dimensions = dimensions || this._dimensions; 
 
 	// The optimal leaf size is dependent on the user agent and model size
 	// Chrome : 1-11  ?? Who knows ??
@@ -17,25 +17,24 @@ function BVH(dimensions, leafSizeMin, leafSizeMax, buildAlgorithm) {
 	this._minLeaf = leafSizeMin || this._minLeaf; // Minimum leaf size
 	this._maxLeaf = leafSizeMax || this._maxLeaf; // Maximum leaf size
 
-	this.treeBuilder = (buildAlgorithm || TreeBuilders.SAH)(
-		this._Dimensions,
-		this._maxLeaf,
-		10,  /* = _kT - Cost per node-traversal */
-		5,   /* = _kI - Cost per intersection test */
-		10, /* = _kO - Cost savings for *empty* overlapped area (higher = better) */
-		1);  /* = _kB - Cost savings for balanced splits (lower = better) */
+	this.treeBuilder = (buildAlgorithm || TreeBuilders.Median)(this);
 
 	this._T = null; // The tree's root
 	this.i = null;  // The tree's AABB
 
-	this.segmentHelpers = SegmentHelpers(this._Dimensions);
-	this.nodeHelpers = NodeHelpers(this._Dimensions);
+	this.segmentHelpers = SegmentHelpers(this._dimensions);
+	this.nodeHelpers = NodeHelpers(this._dimensions);
 };
 
 BVH.prototype = {
-	_Dimensions: 3,
+	_name: "BVH",
+	_dimensions: 3,
 	_minLeaf: 2,
 	_maxLeaf: 4,
+	_kT: 10,  /* = _kT - Cost per node-traversal */
+	_kI: 5,   /* = _kI - Cost per intersection test */
+	_kO: 10,  /* = _kO - Cost savings for *empty* overlapped area (higher = better) */
+	_kB: 1,   /* = _kB - Cost savings for balanced splits (lower = better) */
 	useMultiWayNodes: 0, // 0 = 2 way, 1 = 4 way, 2 = 8 way
 
 	_makeUnfinishedNode : function(boundingBox, sortedArraysOfNodes, totalWeight){

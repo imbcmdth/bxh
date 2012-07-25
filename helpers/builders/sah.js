@@ -2,33 +2,17 @@
 
 module.exports = generateSAHBuilder;
 
-var EPSILON = 1e-16,
-    cachedHelpers = {};
+var EPSILON = 1e-16;
 
-function generateSAHBuilder(dimensions, maxLeaf, kT, kI, kO, kB) {
-	var key = dimensions + "-"
-		    + maxLeaf + "-"
-		    + kT + "-"
-		    + kI + "-"
-		    + kO + "-"
-		    + kB;
-
-	// Cache helpers for each dimension since we only need to make 1
-	if(key in cachedHelpers)
-		return cachedHelpers[key];
-
-	return (cachedHelpers[key] = {
-		_Dimensions: dimensions,
-		_kT: kT,
-		_kI: kI, 
-		_kO: kO,
-		_kB: kB,
-		_maxLeaf: maxLeaf,
+function generateSAHBuilder(tree) {
+	return {
+		_name : "SAH",
+		_tree : tree,
 
 		// Based on SAH
 		// TODO: Make _excluded_ region count towards cost (as a bonus).
 		calculateSplitCost : function(numberOfAxis, leftPlane, rightPlane, leftCount, rightCount, leftAABB, rightAABB, parentSurfaceArea) {
-			var t = this._Dimensions,
+			var t = this._tree._dimensions,
 			    s,
 			    leftSurfaceArea = 0,
 			    rightSurfaceArea = 0,
@@ -40,35 +24,27 @@ function generateSAHBuilder(dimensions, maxLeaf, kT, kI, kO, kB) {
 
 			overlapWidth = Math.abs(overlapWidth);
 
+			leftSurfaceArea = leftAABB.getSurfaceArea();
+			rightSurfaceArea = rightAABB.getSurfaceArea();
 			while(t-->0) {
 				s = t - 1;
-				if(s < 0) s = this._Dimensions - 1;
-				if(doesOverlap) {
-					leftSurfaceArea  += 2 * (t == numberOfAxis ? leftAABB.getLength(t) - overlapWidth : leftAABB.getLength(t))
-											* (s == numberOfAxis ? leftAABB.getLength(s) - overlapWidth : leftAABB.getLength(s));
-					rightSurfaceArea += 2 * (t == numberOfAxis ? rightAABB.getLength(t) - overlapWidth: rightAABB.getLength(t))
-											* (s == numberOfAxis ? rightAABB.getLength(s) - overlapWidth: rightAABB.getLength(s));
-				} else {
-					leftSurfaceArea  += 2 * leftAABB.getLength(t)
-											* leftAABB.getLength(s);
-					rightSurfaceArea += 2 * rightAABB.getLength(t)
-											* rightAABB.getLength(s);
+				if(s < 0) s = this._tree._dimensions - 1;
+				if(t == numberOfAxis || s == numberOfAxis) {
+					overlapSurfaceArea   += 2 * (t == numberOfAxis ? overlapWidth : leftAABB.getLength(t)) 
+										      * (s == numberOfAxis ? overlapWidth : rightAABB.getLength(s));
 				}
-				overlapSurfaceArea   += 2 * (t == numberOfAxis ? overlapWidth : leftAABB.getLength(t)) 
-										    * (s == numberOfAxis ? overlapWidth : rightAABB.getLength(s));
 			}
 
 			if(doesOverlap)
-				SAH = this._kT + this._kI * ( (leftSurfaceArea/parentSurfaceArea)*leftCount 
-						  + (rightSurfaceArea/parentSurfaceArea)*rightCount 
-						  + (overlapSurfaceArea/parentSurfaceArea)*(rightCount+leftCount) );
+				SAH = this._tree._kT + this._tree._kI * ( (leftSurfaceArea/parentSurfaceArea)*leftCount 
+						  + (rightSurfaceArea/parentSurfaceArea)*rightCount );
 			else
-				SAH = this._kT + this._kI * ( (leftSurfaceArea/parentSurfaceArea)*leftCount 
+				SAH = this._tree._kT + this._tree._kI * ( (leftSurfaceArea/parentSurfaceArea)*leftCount 
 						  + (rightSurfaceArea/parentSurfaceArea)*rightCount)
-						  - this._kO * (overlapSurfaceArea/parentSurfaceArea)*(rightCount+leftCount);
+						  - this._tree._kO * (overlapSurfaceArea/parentSurfaceArea)*(rightCount+leftCount);
 
 			b = leftCount - rightCount;
-			if(b <= 1 && b >= 0 ) SAH *= this._kB;
+			if(b <= 1 && b >= 0 ) SAH *= this._tree._kB;
 
 			return SAH;
 		},
@@ -78,7 +54,7 @@ function generateSAHBuilder(dimensions, maxLeaf, kT, kI, kO, kB) {
 			var parentSurfaceArea = AABB.getSurfaceArea(),
 			    cheapestAxis = -1,
 			    cheapestIndex = -1,
-			    cheapestCost = -1,
+			    cheapestCost = Infinity, // Just some large value
 			    cheapestLeftPlane = -1,
 			    cheapestRightPlane = -1,
 			    numberOfAxis = sortedArraysOfNodes.length, // Length of bounding box array
@@ -103,7 +79,7 @@ function generateSAHBuilder(dimensions, maxLeaf, kT, kI, kO, kB) {
 			    cheapestRightWeight = 0;
 
 			totalCount = sortedArraysOfNodes[0].length;
-			costOfTotalIntersection = this._kI * totalCount;
+			costOfTotalIntersection = this._tree._kI * totalCount;
 
 			while(numberOfAxis-->0){
 				leftAABB = AABB.clone();
@@ -135,18 +111,22 @@ function generateSAHBuilder(dimensions, maxLeaf, kT, kI, kO, kB) {
 					leftAABB.max[numberOfAxis] = currentLeftPlane;
 					rightAABB.min[numberOfAxis] = currentRightPlane;
 
-					currentCost = this.calculateSplitCost(
-						numberOfAxis,
-						currentLeftPlane,
-						currentRightPlane,
-						currentLeftWeight,
-						currentRightWeight,
-						leftAABB,
-						rightAABB,
-						parentSurfaceArea
-					);
+					if(currentLeftCount < this._tree._minLeaf || currentRightCount < this._tree._minLeaf) {
+						currentCost = Math.NaN;
+					} else {
+						currentCost = this.calculateSplitCost(
+							numberOfAxis,
+							currentLeftPlane,
+							currentRightPlane,
+							currentLeftWeight,
+							currentRightWeight,
+							leftAABB,
+							rightAABB,
+							parentSurfaceArea
+						);
+					}
 
-					if(cheapestCost + cheapestIndex + cheapestAxis < 0 || currentCost < cheapestCost) {
+					if(currentCost && (cheapestIndex + cheapestAxis < 0 || currentCost < cheapestCost)) {
 						cheapestAxis = numberOfAxis;
 						cheapestIndex = numberOfElements;
 						cheapestCost = currentCost;
@@ -160,7 +140,7 @@ function generateSAHBuilder(dimensions, maxLeaf, kT, kI, kO, kB) {
 				}
 			}
 
-			if(totalCount <= this._maxLeaf && cheapestCost > costOfTotalIntersection) return false;
+			if(cheapestIndex < 0 || (totalCount <= this._tree._maxLeaf && cheapestCost > costOfTotalIntersection)) return false;
 			return({
 				axis: cheapestAxis,
 				index: cheapestIndex,
@@ -171,5 +151,5 @@ function generateSAHBuilder(dimensions, maxLeaf, kT, kI, kO, kB) {
 				rightWeight: cheapestRightWeight
 			});
 		}
-	});
+	};
 }
