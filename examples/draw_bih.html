@@ -21,6 +21,49 @@
 		<p>Green shaded regions are the overlap between two nodes.</p>
 		<h2>Control</h2>
 		<div id="inner-controls">
+			<h3>Number of Objects<img class="help-image" src="images/help.png"></h3>
+			<div class="range-container">
+				<div class="slider">
+					<table id="node-count-slider" width="100%" cellspacing="0" cellpadding="0" class="range">
+						<tr>
+							<td width="11%"></td>
+							<td width="0%"></td>
+						</tr>
+					</table>
+				</div>
+			</div>
+			<div class="min-max-container">
+				<div class="depth-info">
+					<span class="depth-label text-3d"># of Objects:&nbsp;</span>
+					<span id="node-count" class="text-3d info-display"></span>
+				</div>
+			</div>
+			<h3>Size of Objects<img class="help-image" src="images/help.png"></h3>
+			<div class="range-container">
+				<div class="slider">
+					<table id="node-size-slider" width="100%" cellspacing="0" cellpadding="0" class="range">
+						<tr>
+							<td width="0%"></td>
+							<td width="32%"></td>
+							<td width="68%"></td>
+						</tr>
+					</table>
+				</div>
+			</div>
+			<div class="min-max-container">
+				<div class="depth-info">
+					<span class="depth-label text-3d">Minimum Size:&nbsp;</span>
+					<span id="min-size" class="text-3d info-display"></span>
+				</div>
+				<div class="depth-info">
+					<span class="depth-label text-3d">Maximum Size:&nbsp;</span>
+					<span id="max-size" class="text-3d info-display"></span>
+				</div>
+			</div>
+			<h3>Ray Debugger</h3>
+			<div>
+				<button id="make-ray">Draw Ray</button><button id="ray-step" disabled="disabled">Step</button><button id="ray-restart" disabled="disabled">Restart</button>
+			</div>
 			<h3>Build Heuristic<img class="help-image" src="images/help.png"></h3>
 			<div>
 				<label for="build-hueristic-median" class="text-3d">
@@ -132,6 +175,7 @@
 	<div id="world-container">
 		<canvas id="world" width="1024px" height="768px" style="border:1px solid blue;"></canvas>
 		<canvas id="overlay" width="1024px" height="768px" style="border:1px solid blue;"></canvas>
+		<canvas id="interaction" width="1024px" height="768px" style="border:1px solid blue;"></canvas>
 	</div>
 <script type="text/javascript">
 $(function(){
@@ -145,6 +189,9 @@ $(function(){
 	var overlayCanvas = document.getElementById('overlay'),
 	    overlayContext = overlayCanvas.getContext('2d');
 
+	var interactionCanvas = document.getElementById('interaction'),
+	    interactionContext = interactionCanvas.getContext('2d');
+
 	var worldDiv = document.getElementById("world-container");
 
 	var nodes;
@@ -157,60 +204,66 @@ $(function(){
 
 	initColors(colorInfo);
 
-	nodes = new Array(1000);
+	function generateNormalNodes(e, i) {
+		var pos = getNormalDistribution();
+		var x = pos[0] * (canv_off_x / Math.PI),
+			y = pos[1] * (canv_off_y / Math.PI);
+		
+	//  canv_off_x
+		var size = getNormalDistribution();
+		var nodeSizeRange = maxNodeSize - minNodeSize;
+		var nodeOffset = minNodeSize + nodeSizeRange / 2;
+		var w = size[0] * (nodeSizeRange / Math.PI / 2) + nodeOffset,
+			h = size[1] * (nodeSizeRange / Math.PI / 2) + nodeOffset;
+
+		var min = V2.$(x, y),
+			max = V2.$(x + w, y + h),
+			aabb = new AABB(min, max),
+			element = {
+				color: colorInfo.colors[(Math.random()*100).toFixed() % colorInfo.colors.length],
+				min: min,
+				max: max,
+				health: aabb.getVolume() * aabb.getVolume()
+			};
+
+		var node = {
+			i: aabb,
+			w: 1,
+			o: element,
+			iFn : function simpleIntersect(ray, intersectInfo) {
+				var rs = aabb.intersectWithSegment(ray.toIntervals());
+				if(rs) {
+					var p = V2.$(rs[0].a, rs[1].a);
+					var dir = V2.sub(p, ray.position);
+					var t = V2.length(dir);
+					if(t < ray.maxT){
+						intersectInfo.isHit = true;
+						intersectInfo.position = p;
+						intersectInfo.shape = this;
+						ray.maxT = t;
+						intersectInfo.node = node;
+					}
+				}
+			},
+			oFn : aabb.overlaps,
+			csFn : aabb.contains,
+			cnFn : aabb.contained
+		}; 
+		this[i] = node;
+	}
+
+	nodes = new Array(100);
 	asyncEach(
 		nodes,
-		function(e, i) {
-			var x = (Math.pow(2 * Math.random() - 1, 3) * 450),
-				y = (Math.pow(2 * Math.random() - 1, 3) * 340);
-			if(x < 0) x += 450
-			else x -= 480;
-			if(y < 0) y += 330
-			else y -= 360;
-			var scale = 1 - Math.sqrt(x*x + y*y) / 1200;
-			var min = V2.$(x, y),
-				max = V2.$(x + (Math.random() * 40 * scale + 1), y + (Math.random() * 40 * scale + 1)),
-				aabb = new AABB(min, max),
-				element = {
-					color: colorInfo.colors[(Math.random()*100).toFixed() % colorInfo.colors.length],
-					min: min,
-					max: max,
-					health: aabb.getVolume() * aabb.getVolume()
-				};
-
-			var node = {
-				i: aabb,
-				w: 1,
-				o: element,
-				iFn : function simpleIntersect(ray, intersectInfo) {
-					var rs = aabb.intersectWithSegment(ray.toIntervals());
-					if(rs) {
-						var p = V2.$(rs[0].a, rs[1].a);
-						var dir = V2.sub(p, ray.position);
-						var t = V2.length(dir);
-						if(t < ray.maxT){
-							intersectInfo.isHit = true;
-							intersectInfo.position = p;
-							intersectInfo.shape = this;
-							ray.maxT = t;
-							intersectInfo.node = node;
-						}
-					}
-				},
-				oFn : aabb.overlaps,
-				csFn : aabb.contains,
-				cnFn : aabb.contained
-			}; 
-			this[i] = node;
-		},
-		progressMeter1,
+		generateNormalNodes,
+		null,
 		function(err, a) {
 				console.time('t');
 				tree.buildFromArrayOfNodes(a, false);
 				console.timeEnd('t');
 	//		tree.buildFromArrayOfNodesAsync(a, progressMeter2, function(){
 				drawNodes(worldContext, nodes, colorInfo);
-				initMinMaxSlider(tree, nodes, drawBIHTree, overlayContext);
+				initMinMaxSlider(tree, nodes, drawBIHTree, overlayContext, worldContext, interactionContext, colorInfo, generateNormalNodes);
 	//		});
 		}
 	);
