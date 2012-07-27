@@ -2,7 +2,7 @@ var connect = require('connect');
 var browserify = require('browserify');
 
 var b = browserify({
-	require : [ 'bxh', 'mjs']
+	require : [ '../bxh', 'mjs']
 	//,filter : require('uglify-js')
 //	,cache: false
 	,debug: true
