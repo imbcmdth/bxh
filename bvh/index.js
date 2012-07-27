@@ -271,6 +271,140 @@ BVH.prototype = {
 		});
 	},
 
+	each : function(nodeCallback, leafCallback) {
+		function iterate(node, depth){
+			var i, childNode, retVal = true;
+			if(node.n) {
+				i = node.n.length;
+				if(nodeCallback) retVal = nodeCallback(node, depth);
+				while(retVal && i--) {
+					childNode = node.n[i];
+					iterate(childNode, depth+1);
+				}
+			} else if(node.o) {
+				if(leafCallback) leafCallback(node, depth);
+			}
+		}
+		iterate(this._T, 0);
+	},
+
+	intersectStep : function (ray, intersectInfo, stepCallback, finishedCallback) {
+		var parentStack = [],
+		    rayStack = [], // Contains the ray-segment for the current sub-tree
+		    depthStack = null,
+		    rayIntervals = ray.toIntervals(),
+		    majorAxis = ray.getMajorAxis(),
+		    bestSegment = this.segmentHelpers.cloneSegment(rayIntervals),
+		    parentNode,
+		    intersectPoints,
+		    nodes,
+		    i,
+		    rs,
+		    ltree,
+		    leafElementCount,
+		    leafElement,
+		    noDebug = true,
+		    debug = null,
+		    thisTree = this,
+		    step,
+		    subStep;
+
+		if(intersectInfo.debug) {
+			noDebug = false;
+			debug = intersectInfo.debug;
+			depthStack = [];
+		}
+
+		if("s" in this._T) { // An unfinished node!
+			this._T = this._incrementalBuild(this._T);
+		}
+
+		intersectPoints = this.i.intersectWithSegment(rayIntervals);
+		if (intersectPoints === false) {
+			if(finishedCallback) return finishedCallback(intersectInfo);
+			return;
+		}
+
+		// We must cheat if the root of the tree is a leaf
+		if("o" in this._T)
+			parentStack.push({n:[this._T]});
+		else
+			parentStack.push(this._T);
+
+		if(!noDebug) depthStack.push(debug.currDepth);
+		rayStack.push(intersectPoints);
+
+		step = function() {
+			do {
+
+				parentNode = parentStack.pop();
+				nodes = parentNode.n;
+				i = nodes.length;
+				rs = rayStack.pop();
+				if(!noDebug) {
+					debug.depth = Math.max(debug.depth, debug.currDepth);
+					debug.currDepth = depthStack.pop();
+				}
+
+				// Check to see if this node is still reachable
+				if(intersectInfo.isHit) {
+	//					rs = this._TrimStack(bestSegment, rs, majorAxis);
+					if(!thisTree.segmentHelpers.trimSegmentInPlace(bestSegment, rs, majorAxis)) {
+						continue;
+					}
+				}
+				if(!noDebug) debug.costT++;
+
+				subStep = function() {
+					while(i-->0) {
+						ltree = nodes[i];
+
+						// Check to see if this node is still reachable
+						if(intersectInfo.isHit) {
+							if(!thisTree.segmentHelpers.trimSegmentInPlace(bestSegment, rs, majorAxis)) //{
+								continue;
+						}
+
+						intersectPoints = ltree.i.intersectWithSegment(rs);
+
+						if (intersectPoints !== false) {
+
+							if(ltree.s) { // An unfinished node!
+								ltree = thisTree._incrementalBuild(ltree);
+								parentNode.n[i] = ltree;
+							}
+
+							if (ltree.n) { // Not a Leaf
+								rayStack.push(intersectPoints);
+								parentStack.push(ltree);
+								if(!noDebug) depthStack.push(debug.currDepth+1);
+								return stepCallback(ltree, intersectPoints, ltree.i, false, debug.currDepth, subStep);
+							} else if (ltree.o) { // A Leaf !!
+								leafElementCount = ltree.o.length;
+								while(leafElementCount-->0) {
+									if(!noDebug) debug.costI++;
+
+									leafElement = ltree.o[leafElementCount];
+									leafElement.iFn.call(leafElement.o, ray, intersectInfo);
+
+									if(intersectInfo.isHit) {
+										thisTree.segmentHelpers.setBestSegment(bestSegment, intersectInfo.position);
+									}
+								}// end while each element
+								return stepCallback(ltree, intersectPoints, ltree.i, true, debug.currDepth, subStep);
+							}
+						}
+					}
+					step(); // Continue outer loop!
+				};
+				if(parentNode === thisTree._T) return stepCallback(parentNode, rs, parentNode.i, false, debug.currDepth, subStep);
+				else return subStep();
+			} while (parentStack.length > 0);
+			if(finishedCallback) return finishedCallback(intersectInfo);
+		}
+		step();
+	},
+
 	intersect : function (ray, intersectInfo) {
 		var parentStack = [],
 		    rayStack = [], // Contains the ray-segment for the current sub-tree
