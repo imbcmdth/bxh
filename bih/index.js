@@ -315,7 +315,8 @@ BIH.prototype = {
 		if (rs && this._T !== null) {
 			node = this._T;
 		} else {
-			return stepCallback(null, rs, currentAABB, null, 0, null);
+			if(finishedCallback) return finishedCallback(intersectInfo);
+			return;
 		}
 
 		stepCallback(node, rs, currentAABB, null, 0, step);
