@@ -335,7 +335,7 @@ BVH.prototype = {
 		rayStack.push(intersectPoints);
 
 		step = function() {
-			do {
+			while (parentStack.length > 0) {
 
 				parentNode = parentStack.pop();
 				nodes = parentNode.n;
@@ -399,7 +399,7 @@ BVH.prototype = {
 				};
 				if(parentNode === thisTree._T) return stepCallback(parentNode, rs, parentNode.i, false, debug.currDepth, subStep);
 				else return subStep();
-			} while (parentStack.length > 0);
+			}
 			if(finishedCallback) return finishedCallback(intersectInfo);
 		}
 		step();
