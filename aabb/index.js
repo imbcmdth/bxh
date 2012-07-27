@@ -5,7 +5,8 @@ var EPSILON = 1e-16;
 // An Axis-Aligned Bounding Box
 var AABB = function( min, max ) {
 	var i,
-	    dimensions; 
+	    dimensions;
+
 	if(typeof min !== "undefined" && min.length > 1) {
 		if(typeof max !== "undefined"  && min.length !== max.length) {
 			throw new Error("AABB: min and max must be arrays with the same length");
