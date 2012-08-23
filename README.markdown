@@ -1,3 +1,4 @@
+[![build status](https://secure.travis-ci.org/imbcmdth/bxh.png)](http://travis-ci.org/imbcmdth/bxh)
 # B*H
 
 _Bounding Interval and Bounding Volume Hierarchies for Node.js_
