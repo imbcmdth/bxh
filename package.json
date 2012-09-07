@@ -1,6 +1,6 @@
 {
   "name": "bxh",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Bounding interval hierarchy and bounding volume hierarchy library for nodejs",
   "main": "index.js",
   "repository": {

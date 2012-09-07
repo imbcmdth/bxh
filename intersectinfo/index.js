@@ -1,12 +1,25 @@
-"use strict";
+(function (root, factory) {
+		"use strict";
 
-// Most minimal InterSectInfo structure possible
-function IntersectInfo() {
-}
+		if (typeof exports === 'object') {
+			module.exports = factory();
+		} else if (typeof define === 'function' && define.amd) {
+			define(factory);
+		} else {
+			if(!root.BxH) root.BxH = {};
+			root.BxH.IntersectInfo = factory();
+		}
+	}(this, function () {
+		"use strict";
 
-IntersectInfo.prototype = {
-	isHit : false,
-	position : null
-};
+		// Most minimal InterSectInfo structure possible
+		function IntersectInfo() {
+		}
 
-module.exports = IntersectInfo;
+		IntersectInfo.prototype = {
+			isHit : false,
+			position : null
+		};
+
+		return IntersectInfo;
+}));
