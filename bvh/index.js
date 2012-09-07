@@ -9,9 +9,9 @@
 				require('../helpers/node.js'));
 		} else if (typeof define === 'function' && define.amd) {
 			define([
-				'../aabb',
+				'../aabb/index',
 				'../helpers/segment.js',
-				'../helpers/builders',
+				'../helpers/builders/index',
 				'../helpers/node.js'
 			], factory);
 		} else {

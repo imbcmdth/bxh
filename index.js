@@ -10,11 +10,11 @@
 				require('./intersectinfo'));
 		} else if (typeof define === 'function' && define.amd) {
 			define([
-			require('./bvh'),
-				'./bih',
-				'./aabb',
-				'./ray',
-				'./intersectinfo',
+				'./bvh/index',
+				'./bih/index',
+				'./aabb/index',
+				'./ray/index',
+				'./intersectinfo/index',
 			], factory);
 		} else {
 /* Not sure this makes much sense...
@@ -27,10 +27,10 @@
 		}
 	}(this, function (BVH, BIH, AABB, Ray, IntersectInfo) {
 		return {
-			BVH : require('./bvh'),
-			BIH : require('./bih'),
-			AABB: require('./aabb'),
-			Ray: require('./ray'),
-			IntersectInfo: require('./intersectinfo')
+			BVH : BVH,
+			BIH : BIH,
+			AABB: AABB,
+			Ray: Ray,
+			IntersectInfo: IntersectInfo
 		};
 }));
