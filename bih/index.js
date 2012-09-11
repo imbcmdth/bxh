@@ -58,21 +58,23 @@
 
 			// ALL nodes only have one-letter variables to save space in the event that the tree is serialized.
 			// TODO: Allow the tree to be serialized. :)
-			_makeUnfinishedNode : function(boundingBox, sortedArraysOfNodes, totalWeight) {
+			_makeUnfinishedNode : function(boundingBox, sortedArraysOfNodes, totalWeight, currentDepth, currentOffset) {
 				return {
 					i: boundingBox,
 					s: sortedArraysOfNodes,
-					w: totalWeight
+					w: totalWeight,
+					cD: currentDepth,
+					cO: currentOffset
 				};
 			},
 
-			_makeSplittingNode : function(leftPlane, rightPlane, leftNode, rightNode, axis, cost) {
+			_makeSplittingNode : function(leftPlane, rightPlane,/* leftNode, rightNode,*/ axis, cost) {
 				return {
 					x: axis,
 					u: leftPlane,
-					v: rightPlane,
-					l: leftNode,
-					r: rightNode
+					v: rightPlane
+				//	l: leftNode,
+				//	r: rightNode
 				};
 			},
 
@@ -87,7 +89,13 @@
 				// this == node's parent
 			},
 
-			_buildNodeOrLeaf : function(AABB, sortedArraysOfNodes, localWeight, childBuilder) {
+			_buildUnfinishedNode : function(boundingBox, sortedArraysOfNodes, totalWeight, currentDepth, currentOffset) {
+				var arrayOffset = currentDepth * 2 + currentOffset;
+				if(currentDepth < 0) arrayOffset = 0;
+				return this._T[arrayOffset] = this._makeUnfinishedNode(boundingBox, sortedArraysOfNodes, totalWeight, currentDepth, currentOffset);
+			},
+
+			_buildNodeOrLeaf : function(AABB, sortedArraysOfNodes, localWeight, childBuilder, currentDepth) {
 				var numberOfElements = sortedArraysOfNodes[0].length;
 
 				if(numberOfElements <= this._minLeaf) return this._makeLeafNode(
@@ -115,26 +123,35 @@
 
 				// make and return a new node
 				// call childBuilder twice for each node
+				childBuilder.call(this, leftAABB, newArraysOfSortedNodes[0], bestSplit.leftWeight, currentDepth + 1, 1);
+				childBuilder.call(this, rightAABB, newArraysOfSortedNodes[1], bestSplit.rightWeight, currentDepth + 1, 2);
 				return this._makeSplittingNode(
 					bestSplit.left,
 					bestSplit.right,
-					childBuilder.call(this, leftAABB, newArraysOfSortedNodes[0], bestSplit.leftWeight),
-					childBuilder.call(this, rightAABB, newArraysOfSortedNodes[1], bestSplit.rightWeight),
 					bestSplit.axis + 1,
 					bestSplit.cost
 				);
 			},
 
-			_recursiveBuild : function(AABB, sortedArraysOfNodes, localWeight) {
-				return this._buildNodeOrLeaf(AABB, sortedArraysOfNodes, localWeight, this._recursiveBuild);
+			_recursiveBuild : function(AABB, sortedArraysOfNodes, localWeight, currentDepth, currentOffset) {
+				var arrayOffset = currentDepth * 2 + currentOffset;
+				if(currentDepth < 0) arrayOffset = 0;
+				return this._T[arrayOffset] = this._buildNodeOrLeaf(AABB, sortedArraysOfNodes, localWeight, this._recursiveBuild, currentDepth);
 			},
 
-			_incrementalBuild : function(unfinishedNode){
+			_incrementalBuild : function(unfinishedNode, childBuilderFunction){
 				var sortedArraysOfNodes = unfinishedNode.s,
 				    AABB = unfinishedNode.i,
-				    localWeight = unfinishedNode.w;
+				    localWeight = unfinishedNode.w,
+				    currentDepth = unfinishedNode.cD,
+				    currentOffset = unfinishedNode.cO;
 
-					return this._buildNodeOrLeaf(AABB, sortedArraysOfNodes, localWeight, this._makeUnfinishedNode);
+				if(typeof childBuilderFunction !== "function") childBuilderFunction = this._buildUnfinishedNode;
+
+				var arrayOffset = currentDepth * 2 + currentOffset;
+				if(currentDepth < 0) arrayOffset = 0;
+
+				return this._T[arrayOffset] = this._buildNodeOrLeaf(AABB, sortedArraysOfNodes, localWeight, childBuilderFunction, currentDepth);
 			},
 
 			buildFromArrayOfNodes : function(arrayOfNodes, deferredBuild){
@@ -143,11 +160,12 @@
 				    totalWeight = this.nodeHelpers.makeWeight(arrayOfNodes);
 
 				this.i = this.nodeHelpers.makeMBV(arrayOfNodes);
+				this._T = [];
 
 				if(deferredBuild)
-					this._T = this._makeUnfinishedNode(this.i, sortedArraysOfNodes, totalWeight);
+					/* this._T[0] = */ this._buildUnfinishedNode(this.i, sortedArraysOfNodes, totalWeight, -1, 0);
 				else
-					this._T = this._recursiveBuild(this.i, sortedArraysOfNodes, totalWeight);
+					/*this._T[0] = */this._recursiveBuild(this.i, sortedArraysOfNodes, totalWeight, -1, 0);
 			},
 
 			buildFromArrayOfElements : function(arrayOfElements, deferredBuild){
@@ -158,9 +176,7 @@
 				var finishedElementCount = 0,
 				    totalElementsCount = arrayOfNodes.length,
 				    nodesTodo = [],
-				    doLeft = [],
 				    currentNode,
-				    wasLeft,
 				//make sorted lists of nodes. one list per axis sorted by min aabb
 				    sortedArraysOfNodes = this.nodeHelpers.makeSortedArrays(arrayOfNodes),
 				    totalWeight = this.nodeHelpers.makeWeight(arrayOfNodes),
@@ -169,15 +185,23 @@
 				this.i = this.nodeHelpers.makeMBV(arrayOfNodes);
 
 				// Make root..
-				this._T = this._incrementalBuild(this._makeUnfinishedNode(this.i, sortedArraysOfNodes, totalWeight));
-				if(this._T.o) return finishedCallback();
-				nodesTodo.push(this._T);
-				doLeft.push(true);
+				this._T = [];
+				this._incrementalBuild(this._makeUnfinishedNode(this.i, sortedArraysOfNodes, totalWeight, -1, 0), childBuilder);
+				if(this._T[0].o) return finishedCallback();
 
 				if(progressCallback)
 					progressCallback({phase: "Building acceleration structure...", percent: 0});
 
 				process.nextTick(makeTree);
+
+				function childBuilder(boundingBox, sortedArraysOfNodes, totalWeight, currentDepth, currentOffset) {
+					var newNode = this._buildUnfinishedNode(boundingBox, sortedArraysOfNodes, totalWeight, currentDepth, currentOffset);
+					if(newNode.o) {
+						finishedElementCount += newNode.o.length;
+					} else {
+						nodesTodo.push(newNode);
+					}
+				}
 
 				function makeTree() {
 					var startTime = Date.now();
@@ -189,27 +213,7 @@
 						}
 
 						currentNode = nodesTodo.pop();
-						wasLeft = doLeft.pop();
-
-						if(!wasLeft) {
-							currentNode.r = thisTree._incrementalBuild(currentNode.r);
-							if(currentNode.r.o) {
-								finishedElementCount += currentNode.r.o.length;
-							} else {
-								nodesTodo.push(currentNode.r);
-								doLeft.push(true);
-							}
-						} else {
-							currentNode.l = thisTree._incrementalBuild(currentNode.l);
-							nodesTodo.push(currentNode);
-							doLeft.push(false);
-							if(currentNode.l.o) {
-								finishedElementCount += currentNode.l.o.length;
-							} else {
-								nodesTodo.push(currentNode.l);
-								doLeft.push(true);
-							}
-						}
+						thisTree._incrementalBuild(currentNode, childBuilder);
 					}
 					return finishedCallback(null, thisTree);
 				}
@@ -531,6 +535,7 @@
 				    rayStack = [], // Contains the ray-segment for the current sub-tree
 				    depthStack = [], // Just for depth determining. debugging stuff.
 				    directionStack = [], // Which was the last direction taken - true = left
+				    nodeDepth = -1,
 				    lastDirectionWasLeft = true,
 				    rayIntervals = ray.toIntervals(),
 				    majorAxis = ray.getMajorAxis(),
@@ -548,7 +553,6 @@
 				if(intersectInfo.debug) {
 					noDebug = false;
 					debug = intersectInfo.debug;
-					depthStack = [];
 				}
 
 				// Test ray AABB first
@@ -556,28 +560,25 @@
 
 				// If there are no elements or the ray-AABB test failed, don't bother traversing
 				if (rs && this._T !== null) {
-					node = this._T;
+					node = this._T[0];
 				} else {
 					return;
 				}
 
-				while( (node !== null) || parentStack.length > 0) {
-					if(!noDebug) debug.currDepth++;
-
-					if(node === null) {
+				while( (node != null) || depthStack.length > 0) {
+					if(node == null) {
 						rs = rayStack.pop(); // Depth-First Descent
-						parentNode = parentStack.pop();
 						lastDirectionWasLeft = directionStack.pop();
+						nodeDepth = depthStack.pop();
 						if(!noDebug) {
+							debug.currDepth = nodeDepth;
 							debug.depth = Math.max(debug.depth, debug.currDepth);
-							debug.currDepth = depthStack.pop();
 						}
 
-
 						if(lastDirectionWasLeft)
-							node = parentNode.l;
+							node = this._T[nodeDepth * 2 + 1];
 						else
-							node = parentNode.r;
+							node = this._T[nodeDepth * 2 + 2];
 					}
 
 					// Check to see if this node is still reachable
@@ -589,16 +590,19 @@
 					}
 
 					if(node.s) { // An unfinished node!
-						node = this._incrementalBuild(node);
-						if(parentNode == null) {
-							this._T = node;
+						this._incrementalBuild(node);
+						if(nodeDepth < 0) {
+							node = this._T;
 						} else {
 							if(lastDirectionWasLeft)
-								parentNode.l = node;
+								node = this._T[nodeDepth * 2 + 1];
 							else
-								parentNode.r = node;
+								node = this._T[nodeDepth * 2 + 2];
 						}
 					}
+
+					nodeDepth++;
+					if(!noDebug) debug.currDepth++;
 
 					// Below is not an "else if" because we want to continue traversal during an incremental build
 					if (node.x) { // A node!
@@ -610,17 +614,15 @@
 								// The ray enters the volume between the planes so
 								// we need to clip the ray start for this case
 								this.segmentHelpers.clipSegmentStartInPlace(rs, axis, node.u);
-								parentNode = node;
 								lastDirectionWasLeft = true;
-								node = node.l;
+								node = this._T[nodeDepth * 2 + 1];
 							} else if (rs[axis].b >= node.v) { // Is the exit point inside the right node?
 								/* case I2 */
 								// The ray enters the volume between the planes so
 								// we need to clip the ray start for this case
 								this.segmentHelpers.clipSegmentStartInPlace(rs, axis, node.v);
-								parentNode = node;
 								lastDirectionWasLeft = false;
-								node = node.r;
+								node = this._T[nodeDepth * 2 + 2];
 							} // If start is between both planes,
 							// the end point CAN NOT be in BOTH nodes - it is unpossible
 							 else {
@@ -636,32 +638,28 @@
 								}
 								// This will be popped later, so right = far node
 								rayStack.push(newRS);
-								parentStack.push(node);
 								directionStack.push(false);
-								if(!noDebug) depthStack.push(debug.currDepth);
+								depthStack.push(nodeDepth);
 								
 								// If we exit and are no longer in the left node, we must clip the ray
 								if (rs[axis].b > node.u) {
 									this.segmentHelpers.clipSegmentEndInPlace(rs, axis, node.u);
 								}
 								// This will be popped first, so left = near node
-								parentNode = node;
 								lastDirectionWasLeft = true;
-								node = node.l;
+								node = this._T[nodeDepth * 2 + 1];
 							} else if (rs[axis].b < node.v) { // We are exiting before the right plane
 								if (rs[axis].b <= node.u) {
 									// We are exiting before the left plane
 									/* cases N1,N2,N3,P5,Z2,Z3 */
-									parentNode = node;
 									lastDirectionWasLeft = true;
-									node = node.l;
+									node = this._T[nodeDepth * 2 + 1];
 								} else {
 									// The ray exits the volume between the planes so
 									// we need to clip the ray end for this case
 									this.segmentHelpers.clipSegmentEndInPlace(rs, axis, node.u);
-									parentNode = node;
 									lastDirectionWasLeft = true;
-									node = node.l;
+									node = this._T[nodeDepth * 2 + 1];
 								}
 							} else { // The ray exits on the far side of the right plane
 								/* case N4 */
@@ -669,44 +667,39 @@
 								newRS = this.segmentHelpers.clipSegmentStart(rs, axis, node.v);
 
 								rayStack.push(newRS);
-								parentStack.push(node);
 								directionStack.push(false);
-								if(!noDebug) depthStack.push(debug.currDepth);
+								depthStack.push(nodeDepth);
 
 								// This will be popped first, so left = near node
 								this.segmentHelpers.clipSegmentEndInPlace(rs, axis, node.u);
-								parentNode = node;
 								lastDirectionWasLeft = true;
-								node = node.l;
+								node = this._T[nodeDepth * 2 + 1];
 							}
 						} else if (rs[axis].a >= node.v) { // Starts in right node
 							if (rs[axis].b > node.u) { // Ray exits before the left plane
 								if (rs[axis].b >= node.v) { // Ray exits before the right plane
 									/* cases P1,P2,P3,N5,Z1 */
-									parentNode = node;
 									lastDirectionWasLeft = false;
-									node = node.r;
+									node = this._T[nodeDepth * 2 + 2];
+//									node = node.r;
 								} else { /* cases P1,P2,P3,N5,Z1 */
 									// we need to clip the ray end for this case
 									this.segmentHelpers.clipSegmentEndInPlace(rs, axis, node.v);
-									parentNode = node;
 									lastDirectionWasLeft = false;
-									node = node.r;
+									node = this._T[nodeDepth * 2 + 2];
 								}
 							} else { // Ray hits both planes
 								/* case P4 */
 								// This will be popped later, so left = far node
 								newRS = this.segmentHelpers.clipSegmentStart(rs, axis, node.u);
 								rayStack.push(newRS);
-								parentStack.push(node);
 								directionStack.push(true);
-								if(!noDebug) depthStack.push(debug.currDepth);
+								depthStack.push(nodeDepth);
 
 								// This will be popped first, so right = near node
 								this.segmentHelpers.clipSegmentEndInPlace(rs, axis, node.v);
-								parentNode = node;
 								lastDirectionWasLeft = false;
-								node = node.r;
+								node = this._T[nodeDepth * 2 + 2];
 							}
 						} else {
 							node = null;
@@ -756,11 +749,13 @@
 			//   G0 - Interval starts in gap, ends in gap;
 			// Modified for incremental(on-demand?) tree building
 			_search : function(testAABB, returnArray, aabbTestFunction, leafTestFunction, useAlteredLogic) {
-				var parentStack = [], // Contains the nodes that are parents of the hit nodes
-				    directionStack = [], // Which was the last direction taken - true = left
+//				var parentStack = [], // Contains the nodes that are parents of the hit nodes
+//				    directionStack = [], // Which was the last direction taken - true = left
+				var depthStack = [], // 
 				    lastDirectionWasLeft = true,
 				    returnArray = returnArray || [],
 				    node = null,
+				    nodeDepth = -1,
 				    parentNode = null,
 				    axis = null,
 				    leafElementCount,
@@ -775,38 +770,40 @@
 
 				if(overlaps) {
 					if(!alteredLogic){
-						node = this._T;
+						node = this._T[0];
 					} else {
-						if(contained) node = this._T;
+						if(contained) node = this._T[0];
 						else return returnArray;
 					}
 				} else {
 					return returnArray;
 				}
 
-				while( (node != null) || parentStack.length > 0) {
-
+				while( (node != null) || depthStack.length > 0) {
 					if(node == null) {
-						parentNode = parentStack.pop();
-						lastDirectionWasLeft = directionStack.pop();
+						nodeDepth = depthStack.pop();
+						lastDirectionWasLeft = false;
 
 						if(lastDirectionWasLeft)
-							node = parentNode.l;
+							node = this._T[nodeDepth * 2 + 1];
 						else
-							node = parentNode.r;
+							node = this._T[nodeDepth * 2 + 2];
 					}
 
 					if(node.s) { // An unfinished node!
-						node = this._incrementalBuild(node);
-						if(parentNode == null) {
-							this._T = node;
+						this._incrementalBuild(node);
+
+						if(nodeDepth < 0) {
+							node = this._T[0];
 						} else {
 							if(lastDirectionWasLeft)
-								parentNode.l = node;
+								node = this._T[nodeDepth * 2 + 1];
 							else
-								parentNode.r = node;
+								node = this._T[nodeDepth * 2 + 2];
 						}
 					}
+
+					nodeDepth++;
 
 					// Below is not an "else if" because we want to continue traversal during 
 					// an incremental build
@@ -817,23 +814,20 @@
 						if(testAABB.min[axis] <= node.u) { // Starts in left node
 							if(testAABB.max[axis] >= node.v) { // B0 Ends in right - Both nodes
 								if(!alteredLogic || testAABB.min[axis] >= node.v) {
-									parentStack.push(node);
-									directionStack.push(false);
+									depthStack.push(nodeDepth);
 								}
 							} // L0, L1, Left node
 							if(!alteredLogic || testAABB.max[axis] <= node.u) {
-								parentNode = node;
 								lastDirectionWasLeft = true;
-								node = node.l;
+								node = this._T[nodeDepth * 2 + 1];
 							} else {
 								node = null;
 							}
 						} else if(testAABB.max[axis] >= node.v) { // Ends in right
 							// R0, R1 - only Right node
 							if(!alteredLogic || testAABB.min[axis] >= node.v) {
-								parentNode = node;
 								lastDirectionWasLeft = false;
-								node = node.r;
+								node = this._T[nodeDepth * 2 + 2];
 							} else {
 								node = null;
 							}
