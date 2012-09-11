@@ -87,7 +87,7 @@
 				// this == node's parent
 			},
 
-			_recursiveBuild : function(sortedArraysOfNodes, AABB, localWeight) {
+			_buildNodeOrLeaf : function(AABB, sortedArraysOfNodes, localWeight, childBuilder) {
 				var numberOfElements = sortedArraysOfNodes[0].length;
 
 				if(numberOfElements <= this._minLeaf) return this._makeLeafNode(
@@ -114,55 +114,27 @@
 				rightAABB.min[bestSplit.axis] = bestSplit.right;
 
 				// make and return a new node
-				// call recursive_build twice for each node
+				// call childBuilder twice for each node
 				return this._makeSplittingNode(
 					bestSplit.left,
 					bestSplit.right,
-					this._recursiveBuild(newArraysOfSortedNodes[0], leftAABB, bestSplit.leftWeight),
-					this._recursiveBuild(newArraysOfSortedNodes[1], rightAABB, bestSplit.rightWeight),
+					childBuilder.call(this, leftAABB, newArraysOfSortedNodes[0], bestSplit.leftWeight),
+					childBuilder.call(this, rightAABB, newArraysOfSortedNodes[1], bestSplit.rightWeight),
 					bestSplit.axis + 1,
 					bestSplit.cost
 				);
 			},
 
+			_recursiveBuild : function(AABB, sortedArraysOfNodes, localWeight) {
+				return this._buildNodeOrLeaf(AABB, sortedArraysOfNodes, localWeight, this._recursiveBuild);
+			},
+
 			_incrementalBuild : function(unfinishedNode){
 				var sortedArraysOfNodes = unfinishedNode.s,
 				    AABB = unfinishedNode.i,
-				    numberOfElements = sortedArraysOfNodes[0].length,
 				    localWeight = unfinishedNode.w;
 
-				if(numberOfElements <= this._minLeaf) return this._makeLeafNode(
-					this.nodeHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
-
-				// scan across all sorrted-axises for a best fit
-				var bestSplit = this.treeBuilder.getBestSplit(sortedArraysOfNodes, AABB, localWeight);
-
-				// If it is cheaper to build a leaf, do so
-				if(!bestSplit) return this._makeLeafNode(
-					this.nodeHelpers.makeMBV(sortedArraysOfNodes[0]), sortedArraysOfNodes[0]);
-
-				// Make each node's new AABB
-				var leftAABB = AABB.clone(),
-				    rightAABB = AABB.clone(),
-				    newArraysOfSortedNodes = this.nodeHelpers.splitSortedNodeArrays(
-				    	sortedArraysOfNodes,
-				    	bestSplit.axis,
-				    	bestSplit.index,
-				    	bestSplit.left,
-				    	bestSplit.right);
-
-				leftAABB.max[bestSplit.axis] = bestSplit.left;
-				rightAABB.min[bestSplit.axis] = bestSplit.right;
-
-				// make and return a new node
-				return this._makeSplittingNode(
-					bestSplit.left,
-					bestSplit.right,
-					this._makeUnfinishedNode(leftAABB, newArraysOfSortedNodes[0], bestSplit.leftWeight),
-					this._makeUnfinishedNode(rightAABB, newArraysOfSortedNodes[1], bestSplit.rightWeight),
-					bestSplit.axis + 1,
-					bestSplit.cost
-				);
+					return this._buildNodeOrLeaf(AABB, sortedArraysOfNodes, localWeight, this._makeUnfinishedNode);
 			},
 
 			buildFromArrayOfNodes : function(arrayOfNodes, deferredBuild){
@@ -175,7 +147,7 @@
 				if(deferredBuild)
 					this._T = this._makeUnfinishedNode(this.i, sortedArraysOfNodes, totalWeight);
 				else
-					this._T = this._recursiveBuild(sortedArraysOfNodes, this.i, totalWeight);
+					this._T = this._recursiveBuild(this.i, sortedArraysOfNodes, totalWeight);
 			},
 
 			buildFromArrayOfElements : function(arrayOfElements, deferredBuild){
@@ -580,7 +552,6 @@
 				}
 
 				// Test ray AABB first
-		//		rs = _intersectSegmentWithAABB(rayIntervals, this.i);
 				rs = this.i.intersectWithSegment(rayIntervals);
 
 				// If there are no elements or the ray-AABB test failed, don't bother traversing
@@ -609,7 +580,7 @@
 							node = parentNode.r;
 					}
 
-					// Check to see if this node is still reachable - this is buggy
+					// Check to see if this node is still reachable
 					if(intersectInfo.isHit) {
 						if(!this.segmentHelpers.trimSegmentInPlace(bestSegment, rs, majorAxis)) {
 							node = null;
