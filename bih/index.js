@@ -592,7 +592,7 @@
 					if(node.s) { // An unfinished node!
 						this._incrementalBuild(node);
 						if(nodeDepth < 0) {
-							node = this._T;
+							node = this._T[0];
 						} else {
 							if(lastDirectionWasLeft)
 								node = this._T[nodeDepth * 2 + 1];
