@@ -120,8 +120,8 @@
 
 				// make and return a new node
 				// call childBuilder twice for each node
-				childBuilder.call(this, leftAABB, newArraysOfSortedNodes[0], bestSplit.leftWeight, currentIndex * 2 + 1);
-				childBuilder.call(this, rightAABB, newArraysOfSortedNodes[1], bestSplit.rightWeight, currentIndex * 2 + 2);
+				childBuilder.call(this, leftAABB, newArraysOfSortedNodes[0], bestSplit.leftWeight, (currentIndex << 1) + 1);
+				childBuilder.call(this, rightAABB, newArraysOfSortedNodes[1], bestSplit.rightWeight, (currentIndex << 1) + 2);
 				return this._makeSplittingNode(
 					bestSplit.left,
 					bestSplit.right,
@@ -568,10 +568,10 @@
 						}
 
 						if(lastDirectionWasLeft) {
-							currentIndex = currentIndex * 2 + 1;
+							currentIndex = (currentIndex << 1) + 1;
 							node = this._T[currentIndex];
 						} else {
-							currentIndex = currentIndex * 2 + 2;
+							currentIndex = (currentIndex << 1) + 2;
 							node = this._T[currentIndex];
 						}
 					}
@@ -603,7 +603,7 @@
 								// we need to clip the ray start for this case
 								this.segmentHelpers.clipSegmentStartInPlace(rs, axis, node.u);
 								lastDirectionWasLeft = true;
-								currentIndex = currentIndex * 2 + 1;
+								currentIndex = (currentIndex << 1) + 1;
 								node = this._T[currentIndex];
 							} else if (rs[axis].b >= node.v) { // Is the exit point inside the right node?
 								/* case I2 */
@@ -611,7 +611,7 @@
 								// we need to clip the ray start for this case
 								this.segmentHelpers.clipSegmentStartInPlace(rs, axis, node.v);
 								lastDirectionWasLeft = false;
-								currentIndex = currentIndex * 2 + 2;
+								currentIndex = (currentIndex << 1) + 2;
 								node = this._T[currentIndex];
 							} // If start is between both planes,
 							// the end point CAN NOT be in BOTH nodes - it is unpossible
@@ -638,21 +638,21 @@
 								}
 								// This will be popped first, so left = near node
 								lastDirectionWasLeft = true;
-								currentIndex = currentIndex * 2 + 1;
+								currentIndex = (currentIndex << 1) + 1;
 								node = this._T[currentIndex];
 							} else if (rs[axis].b < node.v) { // We are exiting before the right plane
 								if (rs[axis].b <= node.u) {
 									// We are exiting before the left plane
 									/* cases N1,N2,N3,P5,Z2,Z3 */
 									lastDirectionWasLeft = true;
-									currentIndex = currentIndex * 2 + 1;
+									currentIndex = (currentIndex << 1) + 1;
 									node = this._T[currentIndex];
 								} else {
 									// The ray exits the volume between the planes so
 									// we need to clip the ray end for this case
 									this.segmentHelpers.clipSegmentEndInPlace(rs, axis, node.u);
 									lastDirectionWasLeft = true;
-									currentIndex = currentIndex * 2 + 1;
+									currentIndex = (currentIndex << 1) + 1;
 									node = this._T[currentIndex];
 								}
 							} else { // The ray exits on the far side of the right plane
@@ -668,7 +668,7 @@
 								// This will be popped first, so left = near node
 								this.segmentHelpers.clipSegmentEndInPlace(rs, axis, node.u);
 								lastDirectionWasLeft = true;
-								currentIndex = currentIndex * 2 + 1;
+								currentIndex = (currentIndex << 1) + 1;
 								node = this._T[currentIndex];
 							}
 						} else if (rs[axis].a >= node.v) { // Starts in right node
@@ -676,13 +676,13 @@
 								if (rs[axis].b >= node.v) { // Ray exits before the right plane
 									/* cases P1,P2,P3,N5,Z1 */
 									lastDirectionWasLeft = false;
-									currentIndex = currentIndex * 2 + 2;
+									currentIndex = (currentIndex << 1) + 2;
 									node = this._T[currentIndex];
 								} else { /* cases P1,P2,P3,N5,Z1 */
 									// we need to clip the ray end for this case
 									this.segmentHelpers.clipSegmentEndInPlace(rs, axis, node.v);
 									lastDirectionWasLeft = false;
-									currentIndex = currentIndex * 2 + 2;
+									currentIndex = (currentIndex << 1) + 2;
 									node = this._T[currentIndex];
 								}
 							} else { // Ray hits both planes
@@ -698,7 +698,7 @@
 								// This will be popped first, so right = near node
 								this.segmentHelpers.clipSegmentEndInPlace(rs, axis, node.v);
 								lastDirectionWasLeft = false;
-								currentIndex = currentIndex * 2 + 2;
+								currentIndex = (currentIndex << 1) + 2;
 								node = this._T[currentIndex];
 							}
 						} else {
@@ -783,7 +783,7 @@
 					if(node == null) {
 						currentIndex = indexStack.pop();
 						lastDirectionWasLeft = false;
-						currentIndex = currentIndex * 2 + 2;
+						currentIndex = (currentIndex << 1) + 2;
 						node = this._T[currentIndex];
 					}
 
@@ -808,7 +808,7 @@
 							} // L0, L1, Left node
 							if(!alteredLogic || testAABB.max[axis] <= node.u) {
 								lastDirectionWasLeft = true;
-								currentIndex = currentIndex * 2 + 1;
+								currentIndex = (currentIndex << 1) + 1;
 								node = this._T[currentIndex];
 							} else {
 								node = null;
@@ -817,7 +817,7 @@
 							// R0, R1 - only Right node
 							if(!alteredLogic || testAABB.min[axis] >= node.v) {
 								lastDirectionWasLeft = false;
-								currentIndex = currentIndex * 2 + 2;
+								currentIndex = (currentIndex << 1) + 2;
 								node = this._T[currentIndex];
 							} else {
 								node = null;
