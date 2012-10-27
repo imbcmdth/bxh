@@ -3,11 +3,11 @@
 var MJS = require('mjs')(Array),
     V2 = MJS.V2;
 
-var BxH = require('./bxh'),
+var BxH = require('../'),
     BVH = BxH.BVH,
     BIH = BxH.BIH,
-    AABB = BxH.AABB,
-    Ray = BxH.Ray,
+    AABB = require('aabb'),
+    Ray = require('ray'),
     IntersectInfo = BxH.IntersectInfo;
 
 var canv_w = 1024,

@@ -3,7 +3,7 @@ function initMinMaxSlider(tree, nodes, drawTree, overlayContext, worldContext, i
 
 	var minDepth = 0;
 	var maxDepth = 15;
-	var builders = require('bxh/helpers/builders');
+	var builders = require('../helpers/builders');
 	var nextStep;
 	var currentRay;
 	var startPos;

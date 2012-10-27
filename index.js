@@ -5,15 +5,11 @@
 			module.exports = factory(
 				require('./bvh'),
 				require('./bih'),
-				require('./aabb'),
-				require('./ray'),
 				require('./intersectinfo'));
 		} else if (typeof define === 'function' && define.amd) {
 			define([
 				'./bvh/index',
 				'./bih/index',
-				'./aabb/index',
-				'./ray/index',
 				'./intersectinfo/index',
 			], factory);
 		} else {
@@ -25,12 +21,10 @@
 				root.BxH.TreeBuilders,
 				root.BxH.NodeHelpers);*/
 		}
-	}(this, function (BVH, BIH, AABB, Ray, IntersectInfo) {
+	}(this, function (BVH, BIH, IntersectInfo) {
 		return {
 			BVH : BVH,
 			BIH : BIH,
-			AABB: AABB,
-			Ray: Ray,
 			IntersectInfo: IntersectInfo
 		};
 }));

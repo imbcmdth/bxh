@@ -1,7 +1,7 @@
 // Mock 3d objects for testing
 
 var BxH = require('../'),
-    AABB = BxH.AABB,
+    AABB = require('aabb'),
     MJS = require('mjs')(Array)
     V3 = MJS.V3;
 
@@ -13,7 +13,7 @@ function MockObject(AABB, ID) {
 
 MockObject.prototype = {
 	intersect : function(ray, intersectInfo) {
-		var rs = this.AABB.intersectWithRay(ray.toIntervals());
+		var rs = this.AABB.intersectWithRay(ray.toRaySegment());
 		if(rs) {
 			var rv = V3.$(rs[0].a, rs[1].a, rs[2].a);
 			var t = V3.length(V3.sub(rv, ray.position));

@@ -99,7 +99,7 @@
 						}
 					}
 				},
-				
+
 				copySegmentStartFromSegmentStart : function(destination, source) {
 					for(var i = 0; i < this._Dimensions; i++)
 						destination[i].a = source[i].a;
@@ -127,6 +127,7 @@
 					    bestB = Math.max(bestSegment[axis].a, bestSegment[axis].b),
 					    rayA = Math.min(raySegment[axis].a, raySegment[axis].b),
 					    rayB = Math.max(raySegment[axis].a, raySegment[axis].b);
+
 					if(bestA !== bestSegment[axis].a)
 						bestDir = -1;
 					if(rayA !== raySegment[axis].a)

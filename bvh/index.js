@@ -3,13 +3,13 @@
 
 		if (typeof exports === 'object') {
 			module.exports = factory(
-				require('../aabb'),
+				require('aabb'),
 				require('../helpers/segment.js'),
 				require('../helpers/builders'),
 				require('../helpers/node.js'));
 		} else if (typeof define === 'function' && define.amd) {
 			define([
-				'../aabb/index',
+				'/aabb/index',
 				'../helpers/segment.js',
 				'../helpers/builders/index',
 				'../helpers/node.js'
@@ -17,7 +17,7 @@
 		} else {
 			if(!root.BxH) root.BxH = {};
 			root.BxH.BVH = factory(
-				root.BxH.AABB,
+				root.AABB,
 				root.BxH.SegmentHelpers,
 				root.BxH.TreeBuilders,
 				root.BxH.NodeHelpers);
@@ -312,7 +312,7 @@
 				var parentStack = [],
 				    rayStack = [], // Contains the ray-segment for the current sub-tree
 				    depthStack = null,
-				    rayIntervals = ray.toIntervals(),
+				    rayIntervals = ray.toRaySegment(),
 				    majorAxis = ray.getMajorAxis(),
 				    bestSegment = this.segmentHelpers.cloneSegment(rayIntervals),
 				    parentNode,
@@ -429,7 +429,7 @@
 				var parentStack = [],
 				    rayStack = [], // Contains the ray-segment for the current sub-tree
 				    depthStack = null,
-				    rayIntervals = ray.toIntervals(),
+				    rayIntervals = ray.toRaySegment(),
 				    majorAxis = ray.getMajorAxis(),
 				    bestSegment = this.segmentHelpers.cloneSegment(rayIntervals),
 				    parentNode,

@@ -20,8 +20,12 @@
     "acceleration",
     "intersection",
     "search",
-    "javascript"
+    "geometry"
   ],
+  "dependencies": {
+    "ray": ">=0.0.x",
+    "aabb": ">=0.0.x"
+  },
   "devDependencies": {
     "vows": "0.6.x",
     "mjs": "1.0.x",
